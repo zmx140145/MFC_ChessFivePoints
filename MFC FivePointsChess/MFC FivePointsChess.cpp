@@ -160,6 +160,7 @@ bool CMFCFivePointsChessApp::TryAddChess(int PosX, int PosY, PaintType type)
 	pWnd->MessageEdit.SetWindowTextW(str);
 	return false;
 }
+//删除历史记录 用于防止内存泄漏
 void CMFCFivePointsChessApp::freeRecord()
 {
 	Record* pPre;
@@ -170,11 +171,12 @@ void CMFCFivePointsChessApp::freeRecord()
 		free(pPre);
 	}
 }
+//获得当前下棋手
 int CMFCFivePointsChessApp::GetFlag()
 {
 	return m_nFlag;
 }
-
+//改变下棋方
 bool CMFCFivePointsChessApp::ChangeFlag(int x)
 {
 	if (x >= 0)
@@ -188,7 +190,7 @@ bool CMFCFivePointsChessApp::ChangeFlag(int x)
 	
 	return false;
 }
-
+//判断输赢 0没有人赢 1黑方赢 2白方赢
 int CMFCFivePointsChessApp::JudgeWin(int x, int y)
 {
 	int tag= GetChess(x, y);
@@ -218,6 +220,7 @@ int CMFCFivePointsChessApp::JudgeWin(int x, int y)
 	}
 	return 0;
 }
+//清空所有的积分板
 void CMFCFivePointsChessApp::InitAllScoreArray()
 {
 	for (int i = 0; i < ChessBlockNum - 1; i++)
@@ -238,6 +241,7 @@ void CMFCFivePointsChessApp::InitAllScoreArray()
 	}
 	
 }
+//只清空总分积分板
 void CMFCFivePointsChessApp::InitResultScoreArray()
 {
 	for (int i = 0; i < ChessBlockNum - 1; i++)
@@ -251,7 +255,7 @@ void CMFCFivePointsChessApp::InitResultScoreArray()
 	}
 
 }
-//不会清空总分的记录
+//清空除总分外的积分记录
 void CMFCFivePointsChessApp::InitScoreArray()
 {
 	for (int i = 0; i < ChessBlockNum - 1; i++)
@@ -272,14 +276,17 @@ void CMFCFivePointsChessApp::InitScoreArray()
 	}
 
 }
+//AI调用的总入口
 bool CMFCFivePointsChessApp::AI_FindBestPoint(int * x, int * y)
 {
+	std::vector<PointPos*> temp;
 	//先初始化分数 设置为0
 	InitAllScoreArray();
 	BestPoints.clear();
 	Opp_BestPoints.clear();
+	Total_BestPoints.clear();
 	//计算分数
-	/*----------------第一轮筛选---------------*/
+	/*----------------前置筛选---------------*/
 	for (int i = 0; i < ChessBlockNum - 1; i++)
 	{
 		for (int j = 0; j < ChessBlockNum - 1; j++)
@@ -291,6 +298,7 @@ bool CMFCFivePointsChessApp::AI_FindBestPoint(int * x, int * y)
 	}
 	//把空的点位不重复加到bestPoint
 	bool havePoint=false;
+	bool NoRequirePeace=true;
 	for (int i = 0; i < ChessBlockNum - 1; i++)
 	{
 		for (int j = 0; j < ChessBlockNum - 1; j++)
@@ -299,10 +307,12 @@ bool CMFCFivePointsChessApp::AI_FindBestPoint(int * x, int * y)
 			{
 				havePoint = true;
 				PointPos* p = new PointPos{ i,j };
+				temp.push_back(p);
 				BestPoints.push_back(*p);
 			}
 		}
 	}
+	//这个是完全没有棋子 让AI把位置放在屏幕中间
 	if (!havePoint)
 	{
 		if (ChessTag[7][7] == NULLCHESS)
@@ -318,23 +328,42 @@ bool CMFCFivePointsChessApp::AI_FindBestPoint(int * x, int * y)
 	//初始化分数记录的数组们
 	InitAllScoreArray();
 	//剔除掉那些在边界的点 没有可能能够形成五子的地方
-	FirstAssessResult(x, y);
-	//不用清空分数 在2时要用到
-	//剔除掉那些中间的空格太多的点 就是在一个深度上空格很多的
-	SecondAssessResult(x, y);
-	CalculateEmptyPointContainCount();
-	//两轮筛选之后的到的点 符合以下条件：
-	//1.首先有机会形成五个子 无论是敌方还是自己
-	//2.留下了最多子或者第二多子的 进攻 以及 防守的空位点 前提要大于0就是有子
-	JudgeFromChessCount();
-	/*----------------第三轮筛选---------------*/
-	//计算每个点的得分情况 并根据得分把最佳点输出到BestPoints
-	
+	if (!FirstAssessResult())
+	{
+		NoRequirePeace = false;
+	}
+	//把能五子但局部不能五子的地方标记
+	SecondAssessResult();
+	                                          /*-------------------两轮筛选之后的到的点 符合以下条件：-------------------------*/
+				                                          //1.首先有机会形成五个子 无论是敌方还是自己
+				                                         //2.把有些积分是负数说明是不能可能形成5子的
+	                                          /*-------------------------------------------------------------------------------*/
+ /*----------------第三轮筛选---------------*/
+	//得到真实的棋子数
+/*-------------------------------------------*/
+	ThirdAssessResult();
+	//如果有大于3 也就是可以决胜的棋子直接跳过这一步 会返回1 
+	if (JudgeFromChessCount() == 0)
+	{
 	/*----------------第四轮筛选---------------*/
-
-	ReAssessResult(x, y);
-	ReReAssessResult(x, y);
+		     //细分1 2 3棋子数 映射为 0~5
+	/*-----------------------------------------*/
+		FourthAssessResult();
+		//选择得分最大的点 保存到最优点里面
+		JudgeFromChessCount2();
+	}
+	/*----------------第五轮筛选---------------*/
+	 //根据敌人远近 自己棋子多少 空格位多少来算单个方向的的分
+	/*-----------------------------------------*/
+	FifthAssessResult();
+	//第六轮前置筛选 把分数为负数的积分设置为0
+	SetScoreArrayZero();
+	/*----------------第六轮筛选---------------*/
+   //把所有方向的结果加起来 得到综合分最高的点
+    /*-----------------------------------------*/
+	SixthAssessResult();
 	int p;
+	//对剩余的点取随机
 	if (BestPoints.size()-1 >0)
 	{
 		p = randInt(0, BestPoints.size() - 1);
@@ -343,18 +372,25 @@ bool CMFCFivePointsChessApp::AI_FindBestPoint(int * x, int * y)
 	{
 		p = 0;
 	}
-
 	*x=BestPoints.at(p).x;
 	*y = BestPoints.at(p).y;
-	return true;
+	PointPos* pre;
+	for each  (PointPos* it in temp)
+	{
+		pre = it;
+		it = NULL;
+		free(pre);
+	}
+	return NoRequirePeace;
 }
+//用当前时间获得随机数
 unsigned CMFCFivePointsChessApp::randInt(int min, int max)
 {
 	long t = GetTickCount();
 	srand((int)t);
 	return (rand() % (max - min + 1)) + min;
 }
-
+//把所有方向的结果加到总积分板上
 void CMFCFivePointsChessApp::AddResultInResult()
 {
 	for (int i = 0; i < ChessBlockNum - 1; i++)
@@ -366,6 +402,7 @@ void CMFCFivePointsChessApp::AddResultInResult()
 		}
 	}
 }
+//把有棋子的格子周围的空格子加到最优节点中
 void CMFCFivePointsChessApp::AddEmptyPointsNearChessFromPointAllDirection(int x, int y)
 {
 	int tag = GetChess(x, y);
@@ -386,6 +423,7 @@ void CMFCFivePointsChessApp::AddEmptyPointsNearChessFromPointAllDirection(int x,
 	
 	return ;
 }
+//把某方向的空格子加到最优节点中
 void CMFCFivePointsChessApp::AddEmptyPointsFromPoint(int* x, int* y, Direction direction, int Depth)
 {
 	int x1 = *x;
@@ -409,192 +447,9 @@ void CMFCFivePointsChessApp::AddEmptyPointsFromPoint(int* x, int* y, Direction d
 	}
 
 }
-//把不可能下到棋的方向剔除 因为最大分数是8  那么小于4的都设置为-5 其他设置为0
-void CMFCFivePointsChessApp::SecondAssessResult(int* x, int* y)
-{
-	
-	for each (PointPos it in BestPoints)
-	{
-		if (ChessScoreLR[it.x][it.y] < WINCOUNT-1)
-		{
-			ChessScoreLR[it.x][it.y] = -5;
-		}
-		else
-		{
-			ChessScoreLR[it.x][it.y] = 0;
-		}
-		if (ChessScoreUR[it.x][it.y] < WINCOUNT - 1)
-		{
-			ChessScoreUR[it.x][it.y] = -5;
-		}
-		else
-		{
-			ChessScoreUR[it.x][it.y] = 0;
-		}
-		if (ChessScoreUL[it.x][it.y] < WINCOUNT - 1)
-		{
-			ChessScoreUL[it.x][it.y] = -5;
-		}
-		else
-		{
-			ChessScoreUL[it.x][it.y] = 0;
-		}
-		if (ChessScoreUD[it.x][it.y] < WINCOUNT - 1)
-		{
-			ChessScoreUD[it.x][it.y] = -5;
-		}
-		else
-		{
-			ChessScoreUD[it.x][it.y] = 0;
-		}
-	}
-	for each (PointPos it in Opp_BestPoints)
-	{
-		if (Opp_ChessScoreLR[it.x][it.y] < WINCOUNT - 1)
-		{
-			Opp_ChessScoreLR[it.x][it.y] = -5;
-		}
-		else
-		{
-			Opp_ChessScoreLR[it.x][it.y] = 0;
-		}
-		if (Opp_ChessScoreUR[it.x][it.y] < WINCOUNT - 1)
-		{
-			Opp_ChessScoreUR[it.x][it.y] = -5;
-		}
-		else
-		{
-			Opp_ChessScoreUR[it.x][it.y] = 0;
-		}
-		if (Opp_ChessScoreUL[it.x][it.y] < WINCOUNT - 1)
-		{
-			Opp_ChessScoreUL[it.x][it.y] = -5;
-		}
-		else
-		{
-			Opp_ChessScoreUL[it.x][it.y] = 0;
-		}
-		if (Opp_ChessScoreUD[it.x][it.y] < WINCOUNT - 1)
-		{
-			Opp_ChessScoreUD[it.x][it.y] = -5;
-		}
-		else
-		{
-			Opp_ChessScoreUD[it.x][it.y] = 0;
-		}
-	}
-	std::vector<PointPos> temp3;
-	std::vector<PointPos> temp4;
-	/*--------------求差集----------------*/
-	//记录在我方而没有记录在敌方的
-	for each (PointPos it in BestPoints)
-	{
-		bool flag = false;
-		for each (PointPos dit in Opp_BestPoints)
-		{
-			if (it.x == dit.x&&it.y == dit.y)
-			{
-				flag = true;
-			}
-		}
-		if (!flag)
-		{
-			temp3.push_back(it);
-		}
-	}
-	//记录在敌方方而没有记录在我方的
-	for each (PointPos it in Opp_BestPoints)
-	{
-		bool flag = false;
-		for each (PointPos dit in BestPoints)
-		{
-			if (it.x == dit.x&&it.y == dit.y)
-			{
-				flag = true;
-			}
-		}
-		if (!flag)
-		{
-			temp4.push_back(it);
-		}
-	}
-
-	/*-------------求差集结束-------------*/
-	for each (PointPos it in temp3)
-	{
-		if (Opp_ChessScoreLR[it.x][it.y] < WINCOUNT - 1)
-		{
-			Opp_ChessScoreLR[it.x][it.y] = -5;
-		}
-		else
-		{
-			Opp_ChessScoreLR[it.x][it.y] = 0;
-		}
-		if (Opp_ChessScoreUR[it.x][it.y] < WINCOUNT - 1)
-		{
-			Opp_ChessScoreUR[it.x][it.y] = -5;
-		}
-		else
-		{
-			Opp_ChessScoreUR[it.x][it.y] = 0;
-		}
-		if (Opp_ChessScoreUL[it.x][it.y] < WINCOUNT - 1)
-		{
-			Opp_ChessScoreUL[it.x][it.y] = -5;
-		}
-		else
-		{
-			Opp_ChessScoreUL[it.x][it.y] = 0;
-		}
-		if (Opp_ChessScoreUD[it.x][it.y] < WINCOUNT - 1)
-		{
-			Opp_ChessScoreUD[it.x][it.y] = -5;
-		}
-		else
-		{
-			Opp_ChessScoreUD[it.x][it.y] = 0;
-		}
-	}
-	for each (PointPos it in temp4)
-	{
-		if (ChessScoreLR[it.x][it.y] < WINCOUNT - 1)
-		{
-			ChessScoreLR[it.x][it.y] = -5;
-		}
-		else
-		{
-			ChessScoreLR[it.x][it.y] = 0;
-		}
-		if (ChessScoreUR[it.x][it.y] < WINCOUNT - 1)
-		{
-			ChessScoreUR[it.x][it.y] = -5;
-		}
-		else
-		{
-			ChessScoreUR[it.x][it.y] = 0;
-		}
-		if (ChessScoreUL[it.x][it.y] < WINCOUNT - 1)
-		{
-			ChessScoreUL[it.x][it.y] = -5;
-		}
-		else
-		{
-			ChessScoreUL[it.x][it.y] = 0;
-		}
-		if (ChessScoreUD[it.x][it.y] < WINCOUNT - 1)
-		{
-			ChessScoreUD[it.x][it.y] = -5;
-		}
-		else
-		{
-			ChessScoreUD[it.x][it.y] = 0;
-		}
-	}
-	temp3.clear();
-	temp4.clear();
-}
 //初始筛选 把不可能五个子的位置剔除
-void CMFCFivePointsChessApp::FirstAssessResult(int* x, int* y)
+//第一轮是用于去除不可能下到5个棋的点
+bool CMFCFivePointsChessApp::FirstAssessResult()
 {
 	std::vector<PointPos> temp;
 	std::vector<PointPos> temp2;
@@ -816,21 +671,25 @@ void CMFCFivePointsChessApp::FirstAssessResult(int* x, int* y)
 			}
 		}
 	}
-	int count =(WINCOUNT - 1);
+	int count = (WINCOUNT - 1);
 	for each  (PointPos it in BestPoints)
 	{
 		if (Opp_ChessScoreUR[it.x][it.y] >= count || Opp_ChessScoreUL[it.x][it.y] >= count || Opp_ChessScoreUD[it.x][it.y] >= count || Opp_ChessScoreLR[it.x][it.y] >= count)
 		{
 			temp2.push_back(it);
 		}
-			if(ChessScoreUR[it.x][it.y] >= count || ChessScoreUL[it.x][it.y] >= count || ChessScoreUD[it.x][it.y] >= count|| ChessScoreLR[it.x][it.y] >=count)
+		if (ChessScoreUR[it.x][it.y] >= count || ChessScoreUL[it.x][it.y] >= count || ChessScoreUD[it.x][it.y] >= count || ChessScoreLR[it.x][it.y] >= count)
 		{
-				temp.push_back(it);
+			temp.push_back(it);
 		}
 	}
-	
-	if (!temp.empty()|| !temp2.empty())
+	bool deal = true;
+	if (!temp.empty() || !temp2.empty())
 	{
+		if (temp.empty())
+		{
+			deal = false;
+		}
 		BestPoints.clear();
 		for each (PointPos var in temp)
 		{
@@ -842,12 +701,853 @@ void CMFCFivePointsChessApp::FirstAssessResult(int* x, int* y)
 			Opp_BestPoints.push_back(var);
 		}
 	}
-	
-		temp.clear();
-		temp2.clear();
-		return;
+
+	temp.clear();
+	temp2.clear();
+	return deal;
 }
-void CMFCFivePointsChessApp::ReAssessResult(int* x, int* y)
+//把不可能下到棋的方向剔除 因为最大分数是8  那么小于4的都设置为-1 其他设置为0 
+//第二轮是用于识别第一轮中虽然有可能下到5个子但是有些方向是不能下5个子的点
+void CMFCFivePointsChessApp::SecondAssessResult()
+{
+	
+	for each (PointPos it in BestPoints)
+	{
+		if (ChessScoreLR[it.x][it.y] < WINCOUNT-1)
+		{
+			ChessScoreLR[it.x][it.y] = -1;
+		}
+		else
+		{
+			ChessScoreLR[it.x][it.y] = 0;
+		}
+		if (ChessScoreUR[it.x][it.y] < WINCOUNT - 1)
+		{
+			ChessScoreUR[it.x][it.y] = -1;
+		}
+		else
+		{
+			ChessScoreUR[it.x][it.y] = 0;
+		}
+		if (ChessScoreUL[it.x][it.y] < WINCOUNT - 1)
+		{
+			ChessScoreUL[it.x][it.y] = -1;
+		}
+		else
+		{
+			ChessScoreUL[it.x][it.y] = 0;
+		}
+		if (ChessScoreUD[it.x][it.y] < WINCOUNT - 1)
+		{
+			ChessScoreUD[it.x][it.y] = -1;
+		}
+		else
+		{
+			ChessScoreUD[it.x][it.y] = 0;
+		}
+	}
+	for each (PointPos it in Opp_BestPoints)
+	{
+		if (Opp_ChessScoreLR[it.x][it.y] < WINCOUNT - 1)
+		{
+			Opp_ChessScoreLR[it.x][it.y] = -1;
+		}
+		else
+		{
+			Opp_ChessScoreLR[it.x][it.y] = 0;
+		}
+		if (Opp_ChessScoreUR[it.x][it.y] < WINCOUNT - 1)
+		{
+			Opp_ChessScoreUR[it.x][it.y] = -1;
+		}
+		else
+		{
+			Opp_ChessScoreUR[it.x][it.y] = 0;
+		}
+		if (Opp_ChessScoreUL[it.x][it.y] < WINCOUNT - 1)
+		{
+			Opp_ChessScoreUL[it.x][it.y] = -1;
+		}
+		else
+		{
+			Opp_ChessScoreUL[it.x][it.y] = 0;
+		}
+		if (Opp_ChessScoreUD[it.x][it.y] < WINCOUNT - 1)
+		{
+			Opp_ChessScoreUD[it.x][it.y] = -1;
+		}
+		else
+		{
+			Opp_ChessScoreUD[it.x][it.y] = 0;
+		}
+	}
+	std::vector<PointPos> temp3;
+	std::vector<PointPos> temp4;
+	/*--------------求差集----------------*/
+	//记录在我方而没有记录在敌方的
+	for each (PointPos it in BestPoints)
+	{
+		bool flag = false;
+		for each (PointPos dit in Opp_BestPoints)
+		{
+			if (it.x == dit.x&&it.y == dit.y)
+			{
+				flag = true;
+			}
+		}
+		if (!flag)
+		{
+			temp3.push_back(it);
+		}
+	}
+	//记录在敌方方而没有记录在我方的
+	for each (PointPos it in Opp_BestPoints)
+	{
+		bool flag = false;
+		for each (PointPos dit in BestPoints)
+		{
+			if (it.x == dit.x&&it.y == dit.y)
+			{
+				flag = true;
+			}
+		}
+		if (!flag)
+		{
+			temp4.push_back(it);
+		}
+	}
+
+	/*-------------求差集结束-------------*/
+	for each (PointPos it in temp3)
+	{
+		if (Opp_ChessScoreLR[it.x][it.y] < WINCOUNT - 1)
+		{
+			Opp_ChessScoreLR[it.x][it.y] = -1;
+		}
+		else
+		{
+			Opp_ChessScoreLR[it.x][it.y] = 0;
+		}
+		if (Opp_ChessScoreUR[it.x][it.y] < WINCOUNT - 1)
+		{
+			Opp_ChessScoreUR[it.x][it.y] = -1;
+		}
+		else
+		{
+			Opp_ChessScoreUR[it.x][it.y] = 0;
+		}
+		if (Opp_ChessScoreUL[it.x][it.y] < WINCOUNT - 1)
+		{
+			Opp_ChessScoreUL[it.x][it.y] = -1;
+		}
+		else
+		{
+			Opp_ChessScoreUL[it.x][it.y] = 0;
+		}
+		if (Opp_ChessScoreUD[it.x][it.y] < WINCOUNT - 1)
+		{
+			Opp_ChessScoreUD[it.x][it.y] = -1;
+		}
+		else
+		{
+			Opp_ChessScoreUD[it.x][it.y] = 0;
+		}
+	}
+	for each (PointPos it in temp4)
+	{
+		if (ChessScoreLR[it.x][it.y] < WINCOUNT - 1)
+		{
+			ChessScoreLR[it.x][it.y] = -1;
+		}
+		else
+		{
+			ChessScoreLR[it.x][it.y] = 0;
+		}
+		if (ChessScoreUR[it.x][it.y] < WINCOUNT - 1)
+		{
+			ChessScoreUR[it.x][it.y] = -1;
+		}
+		else
+		{
+			ChessScoreUR[it.x][it.y] = 0;
+		}
+		if (ChessScoreUL[it.x][it.y] < WINCOUNT - 1)
+		{
+			ChessScoreUL[it.x][it.y] = -1;
+		}
+		else
+		{
+			ChessScoreUL[it.x][it.y] = 0;
+		}
+		if (ChessScoreUD[it.x][it.y] < WINCOUNT - 1)
+		{
+			ChessScoreUD[it.x][it.y] = -1;
+		}
+		else
+		{
+			ChessScoreUD[it.x][it.y] = 0;
+		}
+	}
+	temp3.clear();
+	temp4.clear();
+}
+//第三轮是用来得到空格位在每个方向的真实最大棋子数
+void CMFCFivePointsChessApp::ThirdAssessResult()
+{
+	int MyTag = GetFlag();
+	int OppTag = BLACKCHESS;
+	if (OppTag == MyTag)
+	{
+		OppTag = WHITECHESS;
+	}
+	int count = 0;
+	for each (PointPos it in BestPoints)
+	{
+		Total_BestPoints.push_back(it);
+		if (ChessScoreLR[it.x][it.y] >= 0)
+		{
+			count = 0;
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Left, 1) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Right, 5), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Left, 2) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Right, 4), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Left, 3) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Right, 3), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Left, 4) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Right, 2), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Left, 5) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Right, 1), count);
+			ChessScoreLR[it.x][it.y] += count;
+		}
+		//上下
+		if (ChessScoreUD[it.x][it.y] >= 0)
+		{
+			count = 0;
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Up, 1) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Down, 5), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Up, 2) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Down, 4), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Up, 3) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Down, 3), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Up, 4) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Down, 2), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Up, 5) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Down, 1), count);
+			ChessScoreUD[it.x][it.y] += count;
+		}
+		//左上右下
+		if (ChessScoreUL[it.x][it.y] >= 0)
+		{
+			count = 0;
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftUp, 1) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightDown, 5), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftUp, 2) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightDown, 4), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftUp, 3) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightDown, 3), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftUp, 4) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightDown, 2), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftUp, 5) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightDown, 1), count);
+			ChessScoreUL[it.x][it.y] += count;
+		}
+		//左下右上
+		if (ChessScoreUR[it.x][it.y] >= 0)
+		{
+			count = 0;
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftDown, 1) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightUp, 5), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftDown, 2) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightUp, 4), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftDown, 3) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightUp, 3), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftDown, 4) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightUp, 2), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftDown, 5) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightUp, 1), count);
+			ChessScoreUR[it.x][it.y] += count;
+		}
+
+	}
+	for each (PointPos it in Opp_BestPoints)
+	{
+		//左右
+		if (Opp_ChessScoreLR[it.x][it.y] >= 0)
+		{
+			count = 0;
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Left, 1) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Right, 5), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Left, 2) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Right, 4), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Left, 3) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Right, 3), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Left, 4) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Right, 2), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Left, 5) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Right, 1), count);
+			Opp_ChessScoreLR[it.x][it.y] += count;
+		}
+		//上下
+		if (Opp_ChessScoreUD[it.x][it.y] >= 0)
+		{
+			count = 0;
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Up, 1) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Down, 5), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Up, 2) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Down, 4), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Up, 3) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Down, 3), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Up, 4) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Down, 2), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Up, 5) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Down, 1), count);
+			Opp_ChessScoreUD[it.x][it.y] += count;
+		}
+
+		//左上右下
+		if (Opp_ChessScoreUL[it.x][it.y] >= 0)
+		{
+			count = 0;
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftUp, 1) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightDown, 5), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftUp, 2) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightDown, 4), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftUp, 3) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightDown, 3), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftUp, 4) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightDown, 2), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftUp, 5) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightDown, 1), count);
+			Opp_ChessScoreUL[it.x][it.y] += count;
+		}
+
+		//左下右上
+		if (Opp_ChessScoreUR[it.x][it.y] >= 0)
+		{
+			count = 0;
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftDown, 1) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightUp, 5), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftDown, 2) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightUp, 4), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftDown, 3) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightUp, 3), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftDown, 4) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightUp, 2), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftDown, 5) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightUp, 1), count);
+			Opp_ChessScoreUR[it.x][it.y] += count;
+		}
+
+	}
+	std::vector<PointPos> temp3;
+	std::vector<PointPos> temp4;
+	/*--------------求差集----------------*/
+	//记录在我方而没有记录在敌方的
+	for each (PointPos it in BestPoints)
+	{
+		bool flag = false;
+		for each (PointPos dit in Opp_BestPoints)
+		{
+			if (it.x == dit.x&&it.y == dit.y)
+			{
+				flag = true;
+			}
+		}
+		if (!flag)
+		{
+			temp3.push_back(it);
+		}
+	}
+	//记录在敌方方而没有记录在我方的
+	for each (PointPos it in Opp_BestPoints)
+	{
+		bool flag = false;
+		for each (PointPos dit in BestPoints)
+		{
+			if (it.x == dit.x&&it.y == dit.y)
+			{
+				flag = true;
+			}
+		}
+		if (!flag)
+		{
+			temp4.push_back(it);
+		}
+	}
+	for each (PointPos it in temp3)
+	{
+		//左右
+		if (Opp_ChessScoreLR[it.x][it.y] >= 0)
+		{
+			count = 0;
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Left, 1) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Right, 5), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Left, 2) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Right, 4), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Left, 3) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Right, 3), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Left, 4) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Right, 2), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Left, 5) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Right, 1), count);
+			Opp_ChessScoreLR[it.x][it.y] += count;
+		}
+		//上下
+		if (Opp_ChessScoreUD[it.x][it.y] >= 0)
+		{
+			count = 0;
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Up, 1) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Down, 5), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Up, 2) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Down, 4), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Up, 3) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Down, 3), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Up, 4) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Down, 2), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Up, 5) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Down, 1), count);
+			Opp_ChessScoreUD[it.x][it.y] += count;
+		}
+
+		//左上右下
+		if (Opp_ChessScoreUL[it.x][it.y] >= 0)
+		{
+			count = 0;
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftUp, 1) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightDown, 5), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftUp, 2) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightDown, 4), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftUp, 3) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightDown, 3), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftUp, 4) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightDown, 2), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftUp, 5) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightDown, 1), count);
+			Opp_ChessScoreUL[it.x][it.y] += count;
+		}
+
+		//左下右上
+		if (Opp_ChessScoreUR[it.x][it.y] >= 0)
+		{
+			count = 0;
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftDown, 1) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightUp, 5), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftDown, 2) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightUp, 4), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftDown, 3) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightUp, 3), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftDown, 4) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightUp, 2), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftDown, 5) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightUp, 1), count);
+			Opp_ChessScoreUR[it.x][it.y] += count;
+		}
+
+	}
+	for each (PointPos it in temp4)
+	{
+		Total_BestPoints.push_back(it);
+		if (ChessScoreLR[it.x][it.y] >= 0)
+		{
+			count = 0;
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Left, 1) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Right, 5), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Left, 2) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Right, 4), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Left, 3) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Right, 3), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Left, 4) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Right, 2), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Left, 5) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Right, 1), count);
+			ChessScoreLR[it.x][it.y] += count;
+		}
+		//上下
+		if (ChessScoreUD[it.x][it.y] >= 0)
+		{
+			count = 0;
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Up, 1) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Down, 5), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Up, 2) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Down, 4), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Up, 3) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Down, 3), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Up, 4) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Down, 2), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Up, 5) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Down, 1), count);
+			ChessScoreUD[it.x][it.y] += count;
+		}
+		//左上右下
+		if (ChessScoreUL[it.x][it.y] >= 0)
+		{
+			count = 0;
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftUp, 1) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightDown, 5), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftUp, 2) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightDown, 4), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftUp, 3) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightDown, 3), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftUp, 4) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightDown, 2), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftUp, 5) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightDown, 1), count);
+			ChessScoreUL[it.x][it.y] += count;
+		}
+		//左下右上
+		if (ChessScoreUR[it.x][it.y] >= 0)
+		{
+			count = 0;
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftDown, 1) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightUp, 5), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftDown, 2) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightUp, 4), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftDown, 3) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightUp, 3), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftDown, 4) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightUp, 2), count);
+			count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftDown, 5) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightUp, 1), count);
+			ChessScoreUR[it.x][it.y] += count;
+		}
+	}
+	temp3.clear();
+	temp4.clear();
+}
+//第四轮是针对棋子数1 2 3这三种情况进行更进一步的甄别 比如通过这个方法可以把 2能变活3 和 3能冲4 设置为同一个优先级的
+void CMFCFivePointsChessApp::FourthAssessResult()
+{
+
+	int TargetCount;
+	int MyTag;
+	int OurChessCount;
+	int FindDepth;
+	int count;
+	int OurChessCount1;
+	int FindDepth1;
+	int count1;
+	int SwitchCase;
+	for each (PointPos it in Total_BestPoints)
+	{
+
+		MyTag = GetFlag();
+		//左右
+		TargetCount = ChessScoreLR[it.x][it.y];
+		OurChessCount = 0;
+		FindDepth = 5;
+		OurChessCount1 = 0;
+		FindDepth1 = 5;
+		SwitchCase = 0;
+		count = CalCulateFromChessCountForSomeDetail(&OurChessCount, &FindDepth, &it.x, &it.y, 0, false, false, MyTag, Left, false, 5);
+		count1 = CalCulateFromChessCountForSomeDetail(&OurChessCount1, &FindDepth1, &it.x, &it.y, 0, false, false, MyTag, Right, false, 5);
+		count = min(1, count);
+		count1 = min(1, count1);
+		if (OurChessCount >= TargetCount || OurChessCount1 >= TargetCount)
+		{
+			if ((FindDepth >= 4 && OurChessCount == 0) || (FindDepth1 >= 4 && OurChessCount1 == 0))
+			{
+				if (FindDepth >= 4 && OurChessCount == 0)
+				{
+					SwitchCase = 1;
+				}
+				else
+				{
+					SwitchCase = 2;
+				}
+			}
+			else
+			{
+				if (OurChessCount >= TargetCount)
+				{
+					SwitchCase = 1;
+				}
+				else
+				{
+					SwitchCase = 2;
+				}
+			}
+		}
+		else
+		{
+			if (OurChessCount + OurChessCount1 == TargetCount)
+			{
+				SwitchCase = 3;
+			}
+			else
+			{
+				SwitchCase = 4;
+			}
+		}
+		AddToScore(it.x, it.y, TargetCount, Left, count, count1, SwitchCase, true);
+		//左上右下
+		TargetCount = ChessScoreUL[it.x][it.y];
+		OurChessCount = 0;
+		FindDepth = 5;
+		OurChessCount1 = 0;
+		FindDepth1 = 5;
+		SwitchCase = 0;
+		count = CalCulateFromChessCountForSomeDetail(&OurChessCount, &FindDepth, &it.x, &it.y, 0, false, false, MyTag, LeftUp, false, 5);
+		count1 = CalCulateFromChessCountForSomeDetail(&OurChessCount1, &FindDepth1, &it.x, &it.y, 0, false, false, MyTag, RightDown, false, 5);
+		count = min(1, count);
+		count1 = min(1, count1);
+		if (OurChessCount >= TargetCount || OurChessCount1 >= TargetCount)
+		{
+			if ((FindDepth >= 4 && OurChessCount == 0) || (FindDepth1 >= 4 && OurChessCount1 == 0))
+			{
+				if (FindDepth >= 4 && OurChessCount == 0)
+				{
+					SwitchCase = 1;
+				}
+				else
+				{
+					SwitchCase = 2;
+				}
+			}
+			else
+			{
+				if (OurChessCount >= TargetCount)
+				{
+					SwitchCase = 1;
+				}
+				else
+				{
+					SwitchCase = 2;
+				}
+			}
+		}
+		else
+		{
+			if (OurChessCount + OurChessCount1 == TargetCount)
+			{
+				SwitchCase = 3;
+			}
+			else
+			{
+				SwitchCase = 4;
+			}
+		}
+		AddToScore(it.x, it.y, TargetCount, LeftUp, count, count1, SwitchCase, true);
+		//右上左下
+		TargetCount = ChessScoreUR[it.x][it.y];
+		OurChessCount = 0;
+		FindDepth = 5;
+		OurChessCount1 = 0;
+		FindDepth1 = 5;
+		SwitchCase = 0;
+		count = CalCulateFromChessCountForSomeDetail(&OurChessCount, &FindDepth, &it.x, &it.y, 0, false, false, MyTag, LeftDown, false, 5);
+		count1 = CalCulateFromChessCountForSomeDetail(&OurChessCount1, &FindDepth1, &it.x, &it.y, 0, false, false, MyTag, RightUp, false, 5);
+		count = min(1, count);
+		count1 = min(1, count1);
+		if (OurChessCount >= TargetCount || OurChessCount1 >= TargetCount)
+		{
+			if ((FindDepth >= 4 && OurChessCount == 0) || (FindDepth1 >= 4 && OurChessCount1 == 0))
+			{
+				if (FindDepth >= 4 && OurChessCount == 0)
+				{
+					SwitchCase = 1;
+				}
+				else
+				{
+					SwitchCase = 2;
+				}
+			}
+			else
+			{
+				if (OurChessCount >= TargetCount)
+				{
+					SwitchCase = 1;
+				}
+				else
+				{
+					SwitchCase = 2;
+				}
+			}
+		}
+		else
+		{
+			if (OurChessCount + OurChessCount1 == TargetCount)
+			{
+				SwitchCase = 3;
+			}
+			else
+			{
+				SwitchCase = 4;
+			}
+		}
+		AddToScore(it.x, it.y, TargetCount, RightUp, count, count1, SwitchCase, true);
+		//上下
+		TargetCount = ChessScoreUD[it.x][it.y];
+		OurChessCount = 0;
+		FindDepth = 5;
+		OurChessCount1 = 0;
+		FindDepth1 = 5;
+		SwitchCase = 0;
+		count = CalCulateFromChessCountForSomeDetail(&OurChessCount, &FindDepth, &it.x, &it.y, 0, false, false, MyTag, Up, false, 5);
+		count1 = CalCulateFromChessCountForSomeDetail(&OurChessCount1, &FindDepth1, &it.x, &it.y, 0, false, false, MyTag, Down, false, 5);
+		count = min(1, count);
+		count1 = min(1, count1);
+		if (OurChessCount >= TargetCount || OurChessCount1 >= TargetCount)
+		{
+			if ((FindDepth >= 4 && OurChessCount == 0) || (FindDepth1 >= 4 && OurChessCount1 == 0))
+			{
+				if (FindDepth >= 4 && OurChessCount == 0)
+				{
+					SwitchCase = 1;
+				}
+				else
+				{
+					SwitchCase = 2;
+				}
+			}
+			else
+			{
+				if (OurChessCount >= TargetCount)
+				{
+					SwitchCase = 1;
+				}
+				else
+				{
+					SwitchCase = 2;
+				}
+			}
+		}
+		else
+		{
+			if (OurChessCount + OurChessCount1 == TargetCount)
+			{
+				SwitchCase = 3;
+			}
+			else
+			{
+				SwitchCase = 4;
+			}
+		}
+		AddToScore(it.x, it.y, TargetCount, Up, count, count1, SwitchCase, true);
+		/*--------------------处理敌方-------------------------*/
+		MyTag = BLACKCHESS;
+		if (MyTag == GetFlag())
+		{
+			MyTag = WHITECHESS;
+		}
+		//左右
+		TargetCount = Opp_ChessScoreLR[it.x][it.y];
+		OurChessCount = 0;
+		FindDepth = 5;
+		OurChessCount1 = 0;
+		FindDepth1 = 5;
+		SwitchCase = 0;
+		count = CalCulateFromChessCountForSomeDetail(&OurChessCount, &FindDepth, &it.x, &it.y, 0, false, false, MyTag, Left, false, 5);
+		count1 = CalCulateFromChessCountForSomeDetail(&OurChessCount1, &FindDepth1, &it.x, &it.y, 0, false, false, MyTag, Right, false, 5);
+		count = min(1, count);
+		count1 = min(1, count1);
+		if (OurChessCount >= TargetCount || OurChessCount1 >= TargetCount)
+		{
+			if ((FindDepth >= 4 && OurChessCount == 0) || (FindDepth1 >= 4 && OurChessCount1 == 0))
+			{
+				if (FindDepth >= 4 && OurChessCount == 0)
+				{
+					SwitchCase = 1;
+				}
+				else
+				{
+					SwitchCase = 2;
+				}
+			}
+			else
+			{
+				if (OurChessCount >= TargetCount)
+				{
+					SwitchCase = 1;
+				}
+				else
+				{
+					SwitchCase = 2;
+				}
+			}
+		}
+		else
+		{
+			if (OurChessCount + OurChessCount1 == TargetCount)
+			{
+				SwitchCase = 3;
+			}
+			else
+			{
+				SwitchCase = 4;
+			}
+		}
+		AddToScore(it.x, it.y, TargetCount, Left, count, count1, SwitchCase, false);
+		//左上右下
+		TargetCount = Opp_ChessScoreUL[it.x][it.y];
+		OurChessCount = 0;
+		FindDepth = 5;
+		OurChessCount1 = 0;
+		FindDepth1 = 5;
+		SwitchCase = 0;
+		count = CalCulateFromChessCountForSomeDetail(&OurChessCount, &FindDepth, &it.x, &it.y, 0, false, false, MyTag, LeftUp, false, 5);
+		count1 = CalCulateFromChessCountForSomeDetail(&OurChessCount1, &FindDepth1, &it.x, &it.y, 0, false, false, MyTag, RightDown, false, 5);
+		count = min(1, count);
+		count1 = min(1, count1);
+		if (OurChessCount >= TargetCount || OurChessCount1 >= TargetCount)
+		{
+			if ((FindDepth >= 4 && OurChessCount == 0) || (FindDepth1 >= 4 && OurChessCount1 == 0))
+			{
+				if (FindDepth >= 4 && OurChessCount == 0)
+				{
+					SwitchCase = 1;
+				}
+				else
+				{
+					SwitchCase = 2;
+				}
+			}
+			else
+			{
+				if (OurChessCount >= TargetCount)
+				{
+					SwitchCase = 1;
+				}
+				else
+				{
+					SwitchCase = 2;
+				}
+			}
+		}
+		else
+		{
+			if (OurChessCount + OurChessCount1 == TargetCount)
+			{
+				SwitchCase = 3;
+			}
+			else
+			{
+				SwitchCase = 4;
+			}
+		}
+		AddToScore(it.x, it.y, TargetCount, LeftUp, count, count1, SwitchCase, false);
+		//右上左下
+		TargetCount = Opp_ChessScoreUR[it.x][it.y];
+		OurChessCount = 0;
+		FindDepth = 5;
+		OurChessCount1 = 0;
+		FindDepth1 = 5;
+		SwitchCase = 0;
+		count = CalCulateFromChessCountForSomeDetail(&OurChessCount, &FindDepth, &it.x, &it.y, 0, false, false, MyTag, LeftDown, false, 5);
+		count1 = CalCulateFromChessCountForSomeDetail(&OurChessCount1, &FindDepth1, &it.x, &it.y, 0, false, false, MyTag, RightUp, false, 5);
+		count = min(1, count);
+		count1 = min(1, count1);
+		if (OurChessCount >= TargetCount || OurChessCount1 >= TargetCount)
+		{
+			if ((FindDepth >= 4 && OurChessCount == 0) || (FindDepth1 >= 4 && OurChessCount1 == 0))
+			{
+				if (FindDepth >= 4 && OurChessCount == 0)
+				{
+					SwitchCase = 1;
+				}
+				else
+				{
+					SwitchCase = 2;
+				}
+			}
+			else
+			{
+				if (OurChessCount >= TargetCount)
+				{
+					SwitchCase = 1;
+				}
+				else
+				{
+					SwitchCase = 2;
+				}
+			}
+		}
+		else
+		{
+			if (OurChessCount + OurChessCount1 == TargetCount)
+			{
+				SwitchCase = 3;
+			}
+			else
+			{
+				SwitchCase = 4;
+			}
+		}
+		AddToScore(it.x, it.y, TargetCount, RightUp, count, count1, SwitchCase, false);
+		//上下
+		TargetCount = Opp_ChessScoreUD[it.x][it.y];
+		OurChessCount = 0;
+		FindDepth = 5;
+		OurChessCount1 = 0;
+		FindDepth1 = 5;
+		SwitchCase = 0;
+		count = CalCulateFromChessCountForSomeDetail(&OurChessCount, &FindDepth, &it.x, &it.y, 0, false, false, MyTag, Up, false, 5);
+		count1 = CalCulateFromChessCountForSomeDetail(&OurChessCount1, &FindDepth1, &it.x, &it.y, 0, false, false, MyTag, Down, false, 5);
+		count = min(1, count);
+		count1 = min(1, count1);
+		if (OurChessCount >= TargetCount || OurChessCount1 >= TargetCount)
+		{
+			if ((FindDepth >= 4 && OurChessCount == 0) || (FindDepth1 >= 4 && OurChessCount1 == 0))
+			{
+				if (FindDepth >= 4 && OurChessCount == 0)
+				{
+					SwitchCase = 1;
+				}
+				else
+				{
+					SwitchCase = 2;
+				}
+			}
+			else
+			{
+				if (OurChessCount >= TargetCount)
+				{
+					SwitchCase = 1;
+				}
+				else
+				{
+					SwitchCase = 2;
+				}
+			}
+		}
+		else
+		{
+			if (OurChessCount + OurChessCount1 == TargetCount)
+			{
+				SwitchCase = 3;
+			}
+			else
+			{
+				SwitchCase = 4;
+			}
+		}
+		AddToScore(it.x, it.y, TargetCount, Up, count, count1, SwitchCase, false);
+	}
+
+
+}
+
+
+void CMFCFivePointsChessApp::FifthAssessResult()
 {
 	//上一次筛选会把4个子的直接内推 其他的删掉
 	//如果没有四个子的那么再比较
@@ -1598,21 +2298,21 @@ void CMFCFivePointsChessApp::ReAssessResult(int* x, int* y)
 	{
 		Opp_BestScore = max(Opp_ChessScoreLR[it.x][it.y], max(Opp_ChessScoreUD[it.x][it.y], max(Opp_ChessScoreUL[it.x][it.y], max(Opp_ChessScoreUR[it.x][it.y], Opp_BestScore))));
 	}
-	if (BestScore >= Opp_BestScore)
+	if (BestScore >= Opp_BestScore-2)
 	{
 		for each (PointPos it in BestPoints)
 		{
-			if (ChessScoreLR[it.x][it.y] == BestScore || ChessScoreUR[it.x][it.y] == BestScore || ChessScoreUL[it.x][it.y] == BestScore || ChessScoreUD[it.x][it.y] == BestScore)
+			if (ChessScoreLR[it.x][it.y] >= BestScore-2 || ChessScoreUR[it.x][it.y] >= BestScore-2 || ChessScoreUL[it.x][it.y] >= BestScore-2 || ChessScoreUD[it.x][it.y] >= BestScore-2)
 			{
 				temp.push_back(it);
 			}
 		}
 	}
-	if (BestScore <= Opp_BestScore)
+	if (BestScore-2 <= Opp_BestScore)
 	{
 		for each (PointPos it in Opp_BestPoints)
 		{
-			if (Opp_ChessScoreLR[it.x][it.y] == Opp_BestScore || Opp_ChessScoreUR[it.x][it.y] == Opp_BestScore || Opp_ChessScoreUL[it.x][it.y] == Opp_BestScore || Opp_ChessScoreUD[it.x][it.y] == Opp_BestScore)
+			if (Opp_ChessScoreLR[it.x][it.y] >= Opp_BestScore-2 || Opp_ChessScoreUR[it.x][it.y] >= Opp_BestScore-2 || Opp_ChessScoreUL[it.x][it.y] >= Opp_BestScore-2 || Opp_ChessScoreUD[it.x][it.y] >= Opp_BestScore-2)
 			{
 				temp2.push_back(it);
 			}
@@ -1638,8 +2338,8 @@ void CMFCFivePointsChessApp::ReAssessResult(int* x, int* y)
 	temp4.clear();
 	return;
 }
-//第四轮筛选
-void CMFCFivePointsChessApp::ReReAssessResult(int* x, int* y)
+
+void CMFCFivePointsChessApp::SixthAssessResult()
 {
 	if (BestPoints.empty()||Opp_BestPoints.empty())
 	{
@@ -1650,12 +2350,11 @@ void CMFCFivePointsChessApp::ReReAssessResult(int* x, int* y)
 				BestPoints.push_back(it);
 			}
 		}
-		return;
 	}
 	AddResultInResult();
 	int BestScore=0;
 	
-	/*-------------删去重复元素-------------------------------------*/
+	/*-------------删去重复元素-------------------------------*/
 	std::vector<PointPos> temp;
 	std::vector<PointPos> temp2;
 	for each (PointPos it in Opp_BestPoints)
@@ -1690,7 +2389,7 @@ void CMFCFivePointsChessApp::ReReAssessResult(int* x, int* y)
 
 	}
 
-	/*------------- ------结束删去重复元素-------------------------------------*/
+	/*-------------------结束删去重复元素-------------------------------------*/
 	for each (PointPos it in temp2)
 	{
 		temp.push_back(it);
@@ -1726,93 +2425,440 @@ void CMFCFivePointsChessApp::ReReAssessResult(int* x, int* y)
 	return;
 	
 }
-
-
-void CMFCFivePointsChessApp::CalculateEmptyPointContainCount()
+void CMFCFivePointsChessApp::SetScoreArrayZero()
 {
-	int MyTag = GetFlag();
-	int OppTag = BLACKCHESS;
-	if (OppTag == MyTag)
+	for (int i = 0; i < ChessBlockNum - 1; i++)
 	{
-		OppTag = WHITECHESS;
-	}
-	int count=0;
-	for each (PointPos it in BestPoints)
-	{
-	
-		count = 0;
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Left, 1) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Right, 5), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Left, 2) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Right, 4), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Left, 3) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Right, 3), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Left, 4) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Right, 2), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Left, 5) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Right, 1), count);
-		ChessScoreLR[it.x][it.y] += count;
-		//上下
-		count = 0;
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Up, 1) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Down, 5), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Up, 2) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Down, 4), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Up, 3) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Down, 3), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Up, 4) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Down, 2), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, Up, 5) + SearchOurPointsCount(&it.x, &it.y, &MyTag, Down, 1), count);
-		ChessScoreUD[it.x][it.y] += count;
-		//左上右下
+		for (int j = 0; j < ChessBlockNum - 1; j++)
+		{
+			if(ChessScoreUD[i][j]<0)
+			ChessScoreUD[i][j] = 0;
+			if(ChessScoreUR[i][j]<0)
+			ChessScoreUR[i][j] = 0;
+			if (ChessScoreUL[i][j] < 0)
+			ChessScoreUL[i][j] = 0;
+			if(ChessScoreLR[i][j]<0)
+			ChessScoreLR[i][j] = 0;
 
-		count = 0;
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftUp, 1) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightDown, 5), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftUp, 2) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightDown, 4), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftUp, 3) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightDown, 3), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftUp, 4) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightDown, 2), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftUp, 5) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightDown, 1), count);
-		ChessScoreUL[it.x][it.y] += count;
-		//左下右上
-		count = 0;
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftDown, 1) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightUp, 5), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftDown, 2) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightUp, 4), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftDown, 3) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightUp, 3), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftDown, 4) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightUp, 2), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &MyTag, LeftDown, 5) + SearchOurPointsCount(&it.x, &it.y, &MyTag, RightUp, 1), count);
-		ChessScoreUR[it.x][it.y] += count;
-	}
-	for each (PointPos it in Opp_BestPoints)
-	{
-		//左右
-		count = 0;
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Left, 1) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Right, 5), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Left, 2) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Right, 4), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Left, 3) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Right, 3), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Left, 4) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Right, 2), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Left, 5) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Right, 1), count);
-		Opp_ChessScoreLR[it.x][it.y] += count;
-		//上下
-		count = 0;
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Up, 1) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Down, 5), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Up, 2) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Down, 4), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Up, 3) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Down, 3), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Up, 4) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Down, 2), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, Up, 5) + SearchOurPointsCount(&it.x, &it.y, &OppTag, Down, 1), count);
-		Opp_ChessScoreUD[it.x][it.y] += count;
-		//左上右下
-
-		count = 0;
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftUp, 1) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightDown, 5), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftUp, 2) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightDown, 4), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftUp, 3) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightDown, 3), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftUp, 4) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightDown, 2), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftUp, 5) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightDown, 1), count);
-		Opp_ChessScoreUL[it.x][it.y] += count;
-		//左下右上
-		count = 0;
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftDown, 1) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightUp, 5), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftDown, 2) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightUp, 4), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftDown, 3) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightUp, 3), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftDown, 4) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightUp, 2), count);
-		count = max(SearchOurPointsCount(&it.x, &it.y, &OppTag, LeftDown, 5) + SearchOurPointsCount(&it.x, &it.y, &OppTag, RightUp, 1), count);
-		Opp_ChessScoreUR[it.x][it.y] += count;
+			if (Opp_ChessScoreUD[i][j] < 0)
+				Opp_ChessScoreUD[i][j] = 0;
+			if (Opp_ChessScoreUR[i][j] < 0)
+				Opp_ChessScoreUR[i][j] = 0;
+			if (Opp_ChessScoreUL[i][j] < 0)
+				Opp_ChessScoreUL[i][j] = 0;
+			if (Opp_ChessScoreLR[i][j] < 0)
+				Opp_ChessScoreLR[i][j] = 0;
+		}
 	}
 }
-//通过棋子数目来进行判断
-void CMFCFivePointsChessApp::JudgeFromChessCount()
+void CMFCFivePointsChessApp::AddToScore(const int& x,const int& y,const int& TargetCount, const Direction& direction, const int& count, const int& count1,const int& Choose,bool myself)
 {
+	if (myself)
+	{
+		switch (direction)
+		{
+		case Left:
+			switch (Choose)
+			{
+			case 1:
+				if (TargetCount == 3)
+				{
+
+					ChessScoreLR[x][y] = ChessScoreLR[x][y] * 2 - count - 1;
+				}
+				else
+				{
+					ChessScoreLR[x][y] = ChessScoreLR[x][y] * 2 - count;
+				}
+				break;
+
+			case 2:
+				if (TargetCount == 3)
+				{
+					ChessScoreLR[x][y] = ChessScoreLR[x][y] * 2 - count1 - 1;
+				}
+				else
+				{
+					ChessScoreLR[x][y] = ChessScoreLR[x][y] * 2 - count1;
+				}
+
+				break;
+			case 3:
+				if (TargetCount == 3)
+				{
+					ChessScoreLR[x][y] = ChessScoreLR[x][y] * 2 - count1 - count - 1;
+				}
+				else
+				{
+					ChessScoreLR[x][y] = ChessScoreLR[x][y] * 2  -count - count1;
+				}
+				break;
+			case 4:
+				if (TargetCount == 3)
+				{
+					ChessScoreLR[x][y] = ChessScoreLR[x][y] * 2 + max(-2, -count1 - count - 1) - 1;
+				}
+				else
+				{
+					ChessScoreLR[x][y] = ChessScoreLR[x][y] * 2 + max(-2, -count1 - count - 1);
+				}
+				break;
+			}
+			break;
+		case LeftUp:
+			switch (Choose)
+			{
+			case 1:
+				if (TargetCount == 3)
+				{
+
+					ChessScoreUL[x][y] = ChessScoreUL[x][y] * 2 - count - 1;
+				}
+				else
+				{
+					ChessScoreUL[x][y] = ChessScoreUL[x][y] * 2 - count;
+				}
+				break;
+
+			case 2:
+				if (TargetCount == 3)
+				{
+					ChessScoreUL[x][y] = ChessScoreUL[x][y] * 2 - count1 - 1;
+				}
+				else
+				{
+					ChessScoreUL[x][y] = ChessScoreUL[x][y] * 2 - count1;
+				}
+
+				break;
+			case 3:
+				if (TargetCount == 3)
+				{
+					ChessScoreUL[x][y] = ChessScoreUL[x][y] * 2 - count1 - count - 1;
+				}
+				else
+				{
+					ChessScoreUL[x][y] = ChessScoreUL[x][y] * 2  -count - count1;
+				}
+				break;
+			case 4:
+				if (TargetCount == 3)
+				{
+					ChessScoreUL[x][y] = ChessScoreUL[x][y] * 2 + max(-2, -count1 - count - 1) - 1;
+				}
+				else
+				{
+					ChessScoreUL[x][y] = ChessScoreUL[x][y] * 2 + max(-2, -count1 - count - 1);
+				}
+				break;
+			}
+			break;
+		case RightUp:
+			switch (Choose)
+			{
+			case 1:
+				if (TargetCount == 3)
+				{
+
+					ChessScoreUR[x][y] = ChessScoreUR[x][y] * 2 - count - 1;
+				}
+				else
+				{
+					ChessScoreUR[x][y] = ChessScoreUR[x][y] * 2 - count;
+				}
+				break;
+
+			case 2:
+				if (TargetCount == 3)
+				{
+					ChessScoreUR[x][y] = ChessScoreUR[x][y] * 2 - count1 - 1;
+				}
+				else
+				{
+					ChessScoreUR[x][y] = ChessScoreUR[x][y] * 2 - count1;
+				}
+
+				break;
+			case 3:
+				if (TargetCount == 3)
+				{
+					ChessScoreUR[x][y] = ChessScoreUR[x][y] * 2 - count1 - count - 1;
+				}
+				else
+				{
+					ChessScoreUR[x][y] = ChessScoreUR[x][y] * 2 -count - count1;
+				}
+				break;
+			case 4:
+				if (TargetCount == 3)
+				{
+					ChessScoreUR[x][y] = ChessScoreUR[x][y] * 2 + max(-2, -count1 - count - 1) - 1;
+				}
+				else
+				{
+					ChessScoreUR[x][y] = ChessScoreUR[x][y] * 2 + max(-2, -count1 - count - 1);
+				}
+				break;
+			}
+			break;
+		case Up:
+			switch (Choose)
+			{
+			case 1:
+				if (TargetCount == 3)
+				{
+
+					ChessScoreUD[x][y] = ChessScoreUD[x][y] * 2 - count - 1;
+				}
+				else
+				{
+					ChessScoreUD[x][y] = ChessScoreUD[x][y] * 2 - count;
+				}
+				break;
+
+			case 2:
+				if (TargetCount == 3)
+				{
+					ChessScoreUD[x][y] = ChessScoreUD[x][y] * 2 - count1 - 1;
+				}
+				else
+				{
+					ChessScoreUD[x][y] = ChessScoreUD[x][y] * 2 - count1;
+				}
+
+				break;
+			case 3:
+				if (TargetCount == 3)
+				{
+					ChessScoreUD[x][y] = ChessScoreUD[x][y] * 2 - count1 - count - 1;
+				}
+				else
+				{
+					ChessScoreUD[x][y] = ChessScoreUD[x][y] * 2 -count - count1;
+				}
+				break;
+			case 4:
+				if (TargetCount == 3)
+				{
+					ChessScoreUD[x][y] = ChessScoreUD[x][y] * 2 +max(-2,- count1 - count -1) - 1;
+				}
+				else
+				{
+					ChessScoreUD[x][y] = ChessScoreUD[x][y] * 2+ max(-2, -count1 - count - 1);
+				}
+				break;
+			}
+			break;
+		}
+	}
+	else
+	{
+	switch (direction)
+	{
+	case Left:
+		switch (Choose)
+		{
+		case 1:
+			if (TargetCount == 3)
+			{
+
+				Opp_ChessScoreLR[x][y] = Opp_ChessScoreLR[x][y] * 2 - count - 1;
+			}
+			else
+			{
+				Opp_ChessScoreLR[x][y] = Opp_ChessScoreLR[x][y] * 2 - count;
+			}
+			break;
+
+		case 2:
+			if (TargetCount == 3)
+			{
+				Opp_ChessScoreLR[x][y] = Opp_ChessScoreLR[x][y] * 2 - count1 - 1;
+			}
+			else
+			{
+				Opp_ChessScoreLR[x][y] = Opp_ChessScoreLR[x][y] * 2 - count1;
+			}
+
+			break;
+		case 3:
+			if (TargetCount == 3)
+			{
+				Opp_ChessScoreLR[x][y] = Opp_ChessScoreLR[x][y] * 2 - count1 - count - 1;
+			}
+			else
+			{
+				Opp_ChessScoreLR[x][y] = Opp_ChessScoreLR[x][y] * 2 -count - count1;
+			}
+			break;
+		case 4:
+			if (TargetCount == 3)
+			{
+				Opp_ChessScoreLR[x][y] = Opp_ChessScoreLR[x][y] * 2 + max(-2, -count1 - count - 1) - 1;
+			}
+			else
+			{
+				Opp_ChessScoreLR[x][y] = Opp_ChessScoreLR[x][y] * 2 + max(-2, -count1 - count - 1);
+			}
+			break;
+		}
+		break;
+	case LeftUp:
+		switch (Choose)
+		{
+		case 1:
+			if (TargetCount == 3)
+			{
+
+				Opp_ChessScoreUL[x][y] = Opp_ChessScoreUL[x][y] * 2 - count - 1;
+			}
+			else
+			{
+				Opp_ChessScoreUL[x][y] = Opp_ChessScoreUL[x][y] * 2 - count;
+			}
+			break;
+
+		case 2:
+			if (TargetCount == 3)
+			{
+				Opp_ChessScoreUL[x][y] = Opp_ChessScoreUL[x][y] * 2 - count1 - 1;
+			}
+			else
+			{
+				Opp_ChessScoreUL[x][y] = Opp_ChessScoreUL[x][y] * 2 - count1;
+			}
+
+			break;
+		case 3:
+			if (TargetCount == 3)
+			{
+				Opp_ChessScoreUL[x][y] = Opp_ChessScoreUL[x][y] * 2 - count1 - count - 1;
+			}
+			else
+			{
+				Opp_ChessScoreUL[x][y] = Opp_ChessScoreUL[x][y] * 2 -count - count1;
+			}
+			break;
+		case 4:
+			if (TargetCount == 3)
+			{
+				Opp_ChessScoreUL[x][y] = Opp_ChessScoreUL[x][y] * 2 + max(-2, -count1 - count - 1) - 1;
+			}
+			else
+			{
+				Opp_ChessScoreUL[x][y] = Opp_ChessScoreUL[x][y] * 2 + max(-2, -count1 - count - 1);
+			}
+			break;
+		}
+		break;
+	case RightUp:
+		switch (Choose)
+		{
+		case 1:
+			if (TargetCount == 3)
+			{
+
+				Opp_ChessScoreUR[x][y] = Opp_ChessScoreUR[x][y] * 2 - count - 1;
+			}
+			else
+			{
+				Opp_ChessScoreUR[x][y] = Opp_ChessScoreUR[x][y] * 2 - count;
+			}
+			break;
+
+		case 2:
+			if (TargetCount == 3)
+			{
+				Opp_ChessScoreUR[x][y] = Opp_ChessScoreUR[x][y] * 2 - count1 - 1;
+			}
+			else
+			{
+				Opp_ChessScoreUR[x][y] = Opp_ChessScoreUR[x][y] * 2 - count1;
+			}
+
+			break;
+		case 3:
+			if (TargetCount == 3)
+			{
+				Opp_ChessScoreUR[x][y] = Opp_ChessScoreUR[x][y] * 2 - count1 - count - 1;
+			}
+			else
+			{
+				Opp_ChessScoreUR[x][y] = Opp_ChessScoreUR[x][y] * 2 -count - count1;
+			}
+			break;
+		case 4:
+			if (TargetCount == 3)
+			{
+				Opp_ChessScoreUR[x][y] = Opp_ChessScoreUR[x][y] * 2 + max(-2, -count1 - count - 1) - 1;
+			}
+			else
+			{
+				Opp_ChessScoreUR[x][y] = Opp_ChessScoreUR[x][y] * 2 + max(-2, -count1 - count - 1);
+			}
+			break;
+		}
+		break;
+	case Up:
+		switch (Choose)
+		{
+		case 1:
+			if (TargetCount == 3)
+			{
+
+				Opp_ChessScoreUD[x][y] = Opp_ChessScoreUD[x][y] * 2 - count - 1;
+			}
+			else
+			{
+				Opp_ChessScoreUD[x][y] = Opp_ChessScoreUD[x][y] * 2 - count;
+			}
+			break;
+
+		case 2:
+			if (TargetCount == 3)
+			{
+				Opp_ChessScoreUD[x][y] = Opp_ChessScoreUD[x][y] * 2 - count1 - 1;
+			}
+			else
+			{
+				Opp_ChessScoreUD[x][y] = Opp_ChessScoreUD[x][y] * 2 - count1;
+			}
+
+			break;
+		case 3:
+			if (TargetCount == 3)
+			{
+				Opp_ChessScoreUD[x][y] = Opp_ChessScoreUD[x][y] * 2 - count1 - count - 1;
+			}
+			else
+			{
+				Opp_ChessScoreUD[x][y] = Opp_ChessScoreUD[x][y] * 2 -count - count1;
+			}
+			break;
+		case 4:
+			if (TargetCount == 3)
+			{
+				Opp_ChessScoreUD[x][y] = Opp_ChessScoreUD[x][y] * 2 + max(-2, -count1 - count - 1) - 1;
+			}
+			else
+			{
+				Opp_ChessScoreUD[x][y] = Opp_ChessScoreUD[x][y] * 2 + max(-2, -count1 - count - 1);
+			}
+			break;
+		}
+		break;
+	}
+	}
+	
+	
+}
+
+//通过棋子数目来进行判断
+//1说明大于等于4 直接下一步
+//0说明最大小于4 要继续判断
+int CMFCFivePointsChessApp::JudgeFromChessCount()
+{
+	int result=0;
 	std::vector<PointPos> temp;
 	std::vector<PointPos> Opp_temp;
 	int BestScore=0;
@@ -1829,6 +2875,74 @@ void CMFCFivePointsChessApp::JudgeFromChessCount()
 	}
 	//如果是4和3 BestScore>=Opp_BestScore 用BestScore 
 	//如果是小于3 那么只有BestScore=Opp时两者都采用 然后是哪个大用哪个
+	//随便一个大于4
+	if (BestScore >= 4 || Opp_BestScore >= 4)
+	{
+		result = 1;
+		if (BestScore >= Opp_BestScore)
+		{
+			for each (PointPos it in BestPoints)
+			{
+				//只要有一个边的子数和最好数目一样加入vector
+				if (ChessScoreLR[it.x][it.y] == BestScore || ChessScoreUR[it.x][it.y] == BestScore || ChessScoreUL[it.x][it.y] == BestScore || ChessScoreUD[it.x][it.y] == BestScore)
+				{
+					temp.push_back(it);
+				}
+			}
+		}
+		else
+		{
+			for each (PointPos it in Opp_BestPoints)
+			{
+				//只要有一个边的子数和最好数目一样加入vector
+				if (Opp_ChessScoreLR[it.x][it.y] == Opp_BestScore || Opp_ChessScoreUR[it.x][it.y] == Opp_BestScore || Opp_ChessScoreUL[it.x][it.y] == Opp_BestScore || Opp_ChessScoreUD[it.x][it.y] == Opp_BestScore)
+				{
+					Opp_temp.push_back(it);
+				}
+			}
+
+		}
+	}
+	if (!temp.empty()|| !Opp_temp.empty())
+	{
+		BestPoints.clear();
+		Opp_BestPoints.clear();
+	}
+	else
+	{
+		return result;
+	}
+	for each (PointPos it in temp)
+	{
+		BestPoints.push_back(it);
+	}
+	for each (PointPos it in Opp_temp)
+	{
+		Opp_BestPoints.push_back(it);
+	}
+	temp.clear();
+	Opp_temp.clear();
+	return 1;
+}
+void CMFCFivePointsChessApp::JudgeFromChessCount2()
+{
+	std::vector<PointPos> temp;
+	std::vector<PointPos> Opp_temp;
+	int BestScore = 0;
+	int Opp_BestScore = 0;
+	//分别求最大值
+	for each (PointPos it in BestPoints)
+	{
+		BestScore = max(ChessScoreUD[it.x][it.y], max(ChessScoreUL[it.x][it.y], max(ChessScoreUR[it.x][it.y], max(ChessScoreLR[it.x][it.y], BestScore))));
+
+	}
+	for each (PointPos it in Opp_BestPoints)
+	{
+		Opp_BestScore = max(Opp_ChessScoreLR[it.x][it.y], max(Opp_ChessScoreUD[it.x][it.y], max(Opp_ChessScoreUL[it.x][it.y], max(Opp_ChessScoreUR[it.x][it.y], Opp_BestScore))));
+	}
+	//如果是4和3 BestScore>=Opp_BestScore 用BestScore 
+	//如果是小于3 那么只有BestScore=Opp时两者都采用 然后是哪个大用哪个
+	//随便一个大于4
 	
 		if (BestScore >= Opp_BestScore)
 		{
@@ -1851,10 +2965,10 @@ void CMFCFivePointsChessApp::JudgeFromChessCount()
 					Opp_temp.push_back(it);
 				}
 			}
-			
+
 		}
-	
-	if (!temp.empty()|| !Opp_temp.empty())
+
+	if (!temp.empty() || !Opp_temp.empty())
 	{
 		BestPoints.clear();
 		Opp_BestPoints.clear();
@@ -2321,6 +3435,129 @@ int CMFCFivePointsChessApp::JudgeChessCanWin(int *x, int *y, int* tag, Direction
 	}
 	
 	
+}
+//这个用于得到空格附近真实棋子数目并扩大两倍后进行进一步判断 把1格、2格和3格细化成0 1 2 3 4 5分 
+//如果一边的OurChessCount已经等于TargetCount 那么只要另外一边不是下面碰到墙和敌人的情况都可以去掉
+//如果OurChessCount==0 FindDepth=4 那么就说明碰到敌人或者墙 要在外部手动进行减分 
+//如果OurChessCount==0 FindDepth<4 那么就是碰到一个空格后碰墙或者敌人返回 算出来的分是不需要减去的 （算法里碰墙那里设置了把层数后移）
+int CMFCFivePointsChessApp::CalCulateFromChessCountForSomeDetail(int * OurChessCount ,int * FindDepth, int * x, int * y,int tempEmptyCount,bool FindEmptyLastRound,bool FindEmpty,const int& MyTag,const Direction& direction,bool FindMe ,int Depth)
+{
+	*FindDepth = Depth;
+	int x1 = *x;
+	int y1 = *y;
+	if (Depth <= 0)
+	{
+		return 0;
+	}
+	if (Depth == 5)
+	{
+		//这个算法开始的格子是空的 所以tag是NULL 直接跳过进去下一层迭代
+		if (CalculatePointDiretion(&x1, &y1, direction))
+		{
+			return CalCulateFromChessCountForSomeDetail(OurChessCount,FindDepth,&x1,&y1,0,false,false,MyTag,direction,false,--Depth);
+		}
+		else
+		{
+			(*FindDepth)=4;
+			*OurChessCount = 0;
+			return 1;
+		}
+
+	}
+	if (ChessTag[x1][y1]== MyTag)
+	{
+		//遇到自己
+		(*OurChessCount) += 1;
+		if (CalculatePointDiretion(&x1, &y1, direction))
+		{
+			if (FindMe)
+			{
+				return CalCulateFromChessCountForSomeDetail(OurChessCount, FindDepth, &x1, &y1, 0, false,FindEmpty, MyTag, direction, true, --Depth)+tempEmptyCount;
+			}
+			else
+			{
+				return CalCulateFromChessCountForSomeDetail(OurChessCount, FindDepth, &x1, &y1, 0, false, FindEmpty,MyTag, direction, true, --Depth);
+			}
+		
+		}
+		else
+		{
+			if (FindMe)
+			{
+				if (Depth > 1)
+				{
+					(*FindDepth) -= 1;
+					//扣一分
+					return 1+tempEmptyCount;
+				}
+				else
+				{
+					return tempEmptyCount;
+				}
+			}
+			else
+			{
+				if (Depth > 1)
+				{
+					(*FindDepth) -= 1;
+					//扣一分
+					return 1;
+				}
+				else
+				{
+					return 0;
+				}
+			}
+			
+			
+		}
+		
+	}
+	else
+	{
+		if (ChessTag[x1][y1] == NULLCHESS)
+		{
+			//空格
+			if (CalculatePointDiretion(&x1, &y1, direction))
+			{
+				if (FindEmpty)
+				{
+					return 0;
+				}
+				else
+				{
+					if (FindMe)
+					{
+						tempEmptyCount += 1;
+						return CalCulateFromChessCountForSomeDetail(OurChessCount, FindDepth, &x1, &y1,tempEmptyCount,true,true,  MyTag, direction, FindMe, --Depth);
+					}
+					else
+					{
+						return CalCulateFromChessCountForSomeDetail(OurChessCount, FindDepth, &x1, &y1, 0,true,true, MyTag, direction, FindMe, --Depth)+1;
+					}
+				}
+			}
+			else
+			{
+				(*FindDepth) -= 1;
+				return 0;
+			}
+		}
+		else
+		{
+			//遇到对手
+			if (FindEmptyLastRound)
+			{
+				return 0;
+			}
+			else
+			{
+				return 1;
+			}
+
+		}
+	}
+
 }
 
 //这种是除非遇到敌人棋子不然就一直递归

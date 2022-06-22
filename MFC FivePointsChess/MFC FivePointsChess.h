@@ -32,6 +32,7 @@ class CMFCFivePointsChessApp : public CWinApp
 
 
 public:
+	std::vector<PointPos> Total_BestPoints;
 	std::vector<PointPos> BestPoints;
 	std::vector<PointPos> Opp_BestPoints;
 	CPoint point; 
@@ -59,8 +60,6 @@ public:
 	int GetChess(int x, int y); //0 //1黑 //2白
 	void CreateRecord(int x, int y, PaintType type);
 	PaintType DeleteAndLoadLastRecord(int * x, int * y);
-	
-	
 	//用坐标添加 //下子
 	bool TryAddChess(int PosX, int PosY, PaintType type);
 	void freeRecord();
@@ -75,56 +74,43 @@ public:
 	//寻找最优的下棋位置 如果找不到那么就说明可以认输了
 	bool AI_FindBestPoint(int*x, int*y);
 	unsigned randInt(int min, int max);
-	void JudgeFromChessCount();
+	int JudgeFromChessCount();
+	void JudgeFromChessCount2();
 	void AddResultInResult();
 	void AddEmptyPointsNearChessFromPointAllDirection(int x, int y);
 	void AddEmptyPointsFromPoint(int * x, int * y, Direction direction, int Depth);
-
-	void SecondAssessResult(int * x, int * y);
-
-	void FirstAssessResult(int * x, int * y);
-
-	void ReReAssessResult(int * x, int * y);
-	
-
-	void ReAssessResult(int*x,int*y);
-	void CalculateEmptyPointContainCount();
-
-
+	void SecondAssessResult();
+	bool FirstAssessResult();
+	void SixthAssessResult();
+	void SetScoreArrayZero();
+	void FifthAssessResult();
+	void ThirdAssessResult();
+	void FourthAssessResult();
+	void AddToScore(const int & x, const int & y, const int & TargetCount, const Direction & direction, const int & count, const int & count1, const int & Choose, bool myself);
 	int SearchOurPointsCount(int * x, int * y, int * TargetTag, Direction direction, int depth);
-	
-
-
-
-	
-
-	
-
-
-
 	int FindOpp_PointOfDirectionPoints2(int * x, int * y, int * TargetTag, int * MyTag, Direction direction, int depth);
-
 	int FindOpp_PointOfDirectionPoints2_2(int * x, int * y, int * TargetTag, int * MyTag, bool Find, Direction direction, int depth);
-
-
-
 	int FindOpp_PointOfDirectionPoints3(int * x, int * y, int * TargetTag, Direction direction, int depth, bool Find);
-
 	int FindOpp_PointOfDirectionPoints(int * x, int * y, int * MyTag, Direction direction, int depth, bool Find);
-
-
-
-	
-
-	
-
-	
-
 	int JudgeChessCanWin2(int * x, int * y, int * tag, int * flag, Direction direction, int Depth);
-
 	int JudgeChessCanWin(int * x, int * y, int * tag, Direction direction, int Depth, int * FindDepth);
+	int CalCulateFromChessCountForSomeDetail(int * OurChessCount, int * FindDepth, int * x, int * y, int tempEmptyCount, bool FindEmptyLastRound, bool FindEmpty, const int & MyTag, const Direction & direction, bool FindMe, int Depth);
+
+
 
 	
+
+	
+
+
+
+
+	
+
+	
+
+	
+
 
 	
 

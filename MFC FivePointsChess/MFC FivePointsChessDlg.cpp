@@ -303,10 +303,8 @@ void CMFCFivePointsChessDlg::DrawSelectRect()
 	MemDC.DeleteDC();
 	background.DeleteDC();
 	
-	/*pWind->RedrawWindow(CRect(SelectX - 15, SelectY - 15, SelectX + 15, SelectY + 15));
-	pWind->RedrawWindow(CRect(SelectX - 20, SelectY - 10, SelectX + 20, SelectY + 10));
-	pWind->RedrawWindow(CRect(SelectX - 10, SelectY - 20, SelectX + 10, SelectY + 20));*/
-	
+
+
 	
 	delete r1;
 	ReleaseDC(pDC);
@@ -473,118 +471,7 @@ BOOL CMFCFivePointsChessDlg::OnEraseBkgnd(CDC* pDC)
 }
 
 
-//void CMFCFivePointsChessDlg::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
-//{
-//
-//	// TODO: 在此添加消息处理程序代码和/或调用默认值
-//	switch (nChar)
-//	{
-//	//SPACE
-//	case VK_SPACE:
-//	{
-//		button.SetFocus();
-//		//落子 
-//		
-//		CString str;
-//		switch (theApp.GetFlag())
-//		{
-//		case 0:
-//		{
-//			
-//
-//			
-//			switch (theApp.GameWiner)
-//			{
-//			case NULLCHESS:
-//			{
-//				str = "请开始游戏";
-//				break;
-//			}
-//			case BLACKCHESS:
-//			{
-//				str = "黑方赢了，游戏结束！";
-//				break;
-//			}
-//			case WHITECHESS:
-//			{
-//				str = "白方赢了，游戏结束！";
-//				break;
-//			}
-//			default:
-//				break;
-//			}
-//			
-//			break;
-//		}
-//		case 1:
-//		{
-//			//黑色下棋
-//		if (theApp.TryAddChess(SelectX, SelectY, Black))
-//			{
-//				//如果成功下棋那么就切换下棋手
-//				str = "请白方下子";
-//				theApp.ChangeFlag(2);
-//			}
-//			break;
-//		}
-//		case 2:
-//		{
-//			//白色下棋
-//			if (theApp.TryAddChess(SelectX, SelectY, White))
-//			{
-//				//如果成功下棋那么就切换下棋手
-//				str = "请黑方下子";
-//				theApp.ChangeFlag(1);
-//			}
-//			break;
-//		}
-//		default:
-//			break;
-//		}
-//		MessageEdit.SetWindowTextW(str);
-//		DrawAllChess(&theApp);
-//		//SPACE结束
-//		break;
-//	}
-//		//W
-//	case 87:
-//	{
-//		JudgeSelectPos(Up);
-//		DrawSelectRect();
-//		break;
-//	}
-//
-//	//A
-//	case 65:
-//	{
-//		JudgeSelectPos(Left);
-//		DrawSelectRect();
-//		break;
-//	}
-//	//S
-//	case 83:
-//	{
-//		JudgeSelectPos(Down);
-//		DrawSelectRect();
-//		break;
-//	}
-//	//D
-//	case 68:
-//	{
-//		JudgeSelectPos(Right);
-//		DrawSelectRect();
-//		break;
-//	}
-//	default:
-//		break;
-//	}
-//	CString str;
-//	str.Format(_T("[%d,%d]  "), SelectX, SelectY);
-//	text.SetWindowTextW(str);
-//	CDialogEx::OnKeyDown(nChar, nRepCnt, nFlags);
-//	KeyDown = false;
-//}
-//
+
 
 BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 {
@@ -659,18 +546,47 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 								str = "电脑正在下子";
 								theApp.ChangeFlag(2);
 								MessageEdit.SetWindowTextW(str);
+								UpdateWindow();
 								int x, y;
-								theApp.AI_FindBestPoint(&x, &y);
-								SelectX = (x + 1)*ChessBlockSide;
-								SelectY = (y + 1)*ChessBlockSide;
-								Sleep(500);
-								DrawSelectRect();
-								Sleep(150);
-								theApp.TryAddChess(SelectX, SelectY, White);
-								DrawSelectRect();
-								str = "请黑方下子";
-								theApp.ChangeFlag(1);
-								break;
+								if (theApp.AI_FindBestPoint(&x, &y))
+								{
+									//进行下棋
+									SelectX = (x + 1)*ChessBlockSide;
+									SelectY = (y + 1)*ChessBlockSide;
+									Sleep(500);
+									DrawSelectRect();
+									Sleep(150);
+									if (!theApp.TryAddChess(SelectX, SelectY, White))
+									{
+										DrawSelectRect();
+										return TRUE;
+									}
+
+									DrawSelectRect();
+
+									str = "请黑方下子";
+									theApp.ChangeFlag(1);
+									break;
+								}
+								else
+								{
+									SelectX = (x + 1)*ChessBlockSide;
+									SelectY = (y + 1)*ChessBlockSide;
+									Sleep(500);
+									DrawSelectRect();
+									Sleep(150);
+									if (!theApp.TryAddChess(SelectX, SelectY, White))
+									{
+										DrawSelectRect();
+										return TRUE;
+									}
+									DrawSelectRect();
+									//求和操作 //TODO:
+									theApp.ChangeFlag(1);
+									break;
+							
+								}
+								
 							}
 							DrawSelectRect();
 							return TRUE;
