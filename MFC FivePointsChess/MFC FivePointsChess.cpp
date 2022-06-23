@@ -22,6 +22,7 @@ BEGIN_MESSAGE_MAP(CMFCFivePointsChessApp, CWinApp)
 	ON_COMMAND(ID_HELP, &CWinApp::OnHelp)
 	ON_COMMAND(ID_32771, &CMFCFivePointsChessApp::OnSave)
 	ON_COMMAND(ID_32772, &CMFCFivePointsChessApp::OnRead)
+	ON_COMMAND(ID_32773, &CMFCFivePointsChessApp::OnRemoveRecord)
 END_MESSAGE_MAP()
 
 
@@ -42,7 +43,27 @@ CMFCFivePointsChessApp::CMFCFivePointsChessApp()
 
 CMFCFivePointsChessApp::~CMFCFivePointsChessApp()
 {
-	freeRecord();
+
+}
+
+void CMFCFivePointsChessApp::SetAI_Station(Station st)
+{
+	AI_Station = st;
+}
+
+Station CMFCFivePointsChessApp::GetAI_Station()
+{
+	return AI_Station;
+}
+
+void CMFCFivePointsChessApp::SetSkill(Skill sk)
+{
+	PlayerSkill = sk;
+}
+
+Skill CMFCFivePointsChessApp::GetSkill()
+{
+	return PlayerSkill;
 }
 
 void CMFCFivePointsChessApp::init()
@@ -57,7 +78,7 @@ void CMFCFivePointsChessApp::init()
 	}
 	m_nFlag = 1;
 	GameWiner = 0;
-	pRecord = NULL;
+	freeRecord();
 }
 //获得棋盘位置的信息
 int CMFCFivePointsChessApp::GetChess(int x, int y)
@@ -154,10 +175,6 @@ bool CMFCFivePointsChessApp::TryAddChess(int PosX, int PosY, PaintType type)
 		break;
 	}
 	}
-	CString str;
-	str = "游戏结束！》》按空格";
-	CMFCFivePointsChessDlg* pWnd = (CMFCFivePointsChessDlg*)AfxGetApp()->GetMainWnd();
-	pWnd->MessageEdit.SetWindowTextW(str);
 	return false;
 }
 //删除历史记录 用于防止内存泄漏
@@ -200,21 +217,21 @@ int CMFCFivePointsChessApp::JudgeWin(int x, int y)
 	}
 	//判断4个方向 
 	//左右方向
-	if (JudgeWinDirection(&x, &y, &tag, Left, WINCOUNT) + JudgeWinDirection(&x, &y, &tag, Right, WINCOUNT) - 1 == WINCOUNT)
+	if (JudgeWinDirection(&x, &y, &tag, Left, WINCOUNT) + JudgeWinDirection(&x, &y, &tag, Right, WINCOUNT) - 1 >= WINCOUNT)
 	{
 		return tag;
 	}
 	//上下方向
-	if (JudgeWinDirection(&x, &y, &tag, Up, WINCOUNT) + JudgeWinDirection(&x, &y, &tag, Down, WINCOUNT) - 1 == WINCOUNT)
+	if (JudgeWinDirection(&x, &y, &tag, Up, WINCOUNT) + JudgeWinDirection(&x, &y, &tag, Down, WINCOUNT) - 1 >= WINCOUNT)
 	{
 		return tag;
 	}
 	//左上右下
-	if (JudgeWinDirection(&x, &y, &tag, LeftUp, WINCOUNT) + JudgeWinDirection(&x, &y, &tag, RightDown, WINCOUNT) - 1 == WINCOUNT)
+	if (JudgeWinDirection(&x, &y, &tag, LeftUp, WINCOUNT) + JudgeWinDirection(&x, &y, &tag, RightDown, WINCOUNT) - 1 >= WINCOUNT)
 	{
 		return tag;
 	}
-	if (JudgeWinDirection(&x, &y, &tag, LeftDown, WINCOUNT) + JudgeWinDirection(&x, &y, &tag, RightUp, WINCOUNT) - 1 == WINCOUNT)
+	if (JudgeWinDirection(&x, &y, &tag, LeftDown, WINCOUNT) + JudgeWinDirection(&x, &y, &tag, RightUp, WINCOUNT) - 1 >= WINCOUNT)
 	{
 		return tag;
 	}
@@ -345,12 +362,16 @@ bool CMFCFivePointsChessApp::AI_FindBestPoint(int * x, int * y)
 	//如果有大于3 也就是可以决胜的棋子直接跳过这一步 会返回1 
 	if (JudgeFromChessCount() == 0)
 	{
+		             /*===============改变情绪================*/
+		               AI_Station = think;
+		             /*--------------------势均力敌---------------*/
 	/*----------------第四轮筛选---------------*/
-		     //细分1 2 3棋子数 映射为 0~5
+		  //细分1 2 3棋子数 映射为 0~5
+		  FourthAssessResult();
+		 //选择得分最大的点 保存到最优点里面
+		 JudgeFromChessCount2();
 	/*-----------------------------------------*/
-		FourthAssessResult();
-		//选择得分最大的点 保存到最优点里面
-		JudgeFromChessCount2();
+		
 	}
 	/*----------------第五轮筛选---------------*/
 	 //根据敌人远近 自己棋子多少 空格位多少来算单个方向的的分
@@ -1546,7 +1567,7 @@ void CMFCFivePointsChessApp::FourthAssessResult()
 
 }
 
-
+//第五轮对剩余节点进行积分筛选 就是加空格分 加连续分 减碰壁碰别人的分 让单个方向对自己更有利的分数高
 void CMFCFivePointsChessApp::FifthAssessResult()
 {
 	//上一次筛选会把4个子的直接内推 其他的删掉
@@ -2338,7 +2359,7 @@ void CMFCFivePointsChessApp::FifthAssessResult()
 	temp4.clear();
 	return;
 }
-
+//第六轮对所有的结果进行求和 并且算出总分最高的点
 void CMFCFivePointsChessApp::SixthAssessResult()
 {
 	if (BestPoints.empty()||Opp_BestPoints.empty())
@@ -2425,6 +2446,7 @@ void CMFCFivePointsChessApp::SixthAssessResult()
 	return;
 	
 }
+//第六轮的前置工作 把单个方向中负数的设置为0 防止太大造成干扰
 void CMFCFivePointsChessApp::SetScoreArrayZero()
 {
 	for (int i = 0; i < ChessBlockNum - 1; i++)
@@ -2451,6 +2473,7 @@ void CMFCFivePointsChessApp::SetScoreArrayZero()
 		}
 	}
 }
+//这是第四轮的相关加分操作 太多了把它封装到函数里
 void CMFCFivePointsChessApp::AddToScore(const int& x,const int& y,const int& TargetCount, const Direction& direction, const int& count, const int& count1,const int& Choose,bool myself)
 {
 	if (myself)
@@ -2852,7 +2875,6 @@ void CMFCFivePointsChessApp::AddToScore(const int& x,const int& y,const int& Tar
 	
 	
 }
-
 //通过棋子数目来进行判断
 //1说明大于等于4 直接下一步
 //0说明最大小于4 要继续判断
@@ -2881,6 +2903,10 @@ int CMFCFivePointsChessApp::JudgeFromChessCount()
 		result = 1;
 		if (BestScore >= Opp_BestScore)
 		{
+			/*===============改变情绪================*/
+			AI_Station = happy;
+			/*--------------------我方大优势---------------*/
+			
 			for each (PointPos it in BestPoints)
 			{
 				//只要有一个边的子数和最好数目一样加入vector
@@ -2892,6 +2918,9 @@ int CMFCFivePointsChessApp::JudgeFromChessCount()
 		}
 		else
 		{
+			/*===============改变情绪================*/
+			AI_Station = sad;
+			/*--------------------敌人大优势---------------*/
 			for each (PointPos it in Opp_BestPoints)
 			{
 				//只要有一个边的子数和最好数目一样加入vector
@@ -2922,8 +2951,9 @@ int CMFCFivePointsChessApp::JudgeFromChessCount()
 	}
 	temp.clear();
 	Opp_temp.clear();
-	return 1;
+	return result;
 }
+//在棋子为1 2 3个时 如果我方最大棋子大于等于对方 优先采取我方点 就是优先进攻
 void CMFCFivePointsChessApp::JudgeFromChessCount2()
 {
 	std::vector<PointPos> temp;
@@ -2989,6 +3019,7 @@ void CMFCFivePointsChessApp::JudgeFromChessCount2()
 	Opp_temp.clear();
 	return;
 }
+//这是第三轮配套的算法 算出单个方向的同类型棋子
 int CMFCFivePointsChessApp::SearchOurPointsCount(int*x, int*y, int* TargetTag, Direction direction, int depth)
 {
 	int x1 = *x;
@@ -3027,7 +3058,7 @@ int CMFCFivePointsChessApp::SearchOurPointsCount(int*x, int*y, int* TargetTag, D
 		return 0;
 	}
 }
-//这个是在第四轮筛选
+/*--------------------------------------------第五轮筛选的配套算法-------------------------------------------*/
 //减去两个自己棋子之间的棋子  自己在两个棋子里面
 //MaxScore为减分的最大分  最后结果是 depth
 int CMFCFivePointsChessApp::FindOpp_PointOfDirectionPoints2(int*x, int*y, int* TargetTag,int* MyTag,Direction direction, int depth)
@@ -3233,7 +3264,6 @@ int CMFCFivePointsChessApp::FindOpp_PointOfDirectionPoints3(int*x, int*y, int* T
 		}
 	}
   }
-
 //寻找敌人扣分机制
 int CMFCFivePointsChessApp::FindOpp_PointOfDirectionPoints(int*x,int*y, int* MyTag,Direction direction,int depth,bool Find)
 {
@@ -3319,61 +3349,9 @@ int CMFCFivePointsChessApp::FindOpp_PointOfDirectionPoints(int*x,int*y, int* MyT
 }
 
 
-//判断 是否自己和自己连续的空位太多
-int CMFCFivePointsChessApp::JudgeChessCanWin2(int *x, int *y, int* tag,int* flag, Direction direction, int Depth)
-{
-	int x1 = *x;
-	int y1 = *y;
-	if (Depth <= 0)
-	{
-		return 0;
-	}
-	if (Depth == 5)
-	{
-		//这个算法开始的格子是空的 所以tag是NULL 直接跳过进去下一层迭代
-		if (CalculatePointDiretion(&x1, &y1, direction))
-		{
-			return JudgeChessCanWin2(&x1, &y1, tag,flag, direction, --Depth);
-		}
-		else
-		{
-			return 0;
-		}
-	}
-	if (*flag == NULLCHESS)
-	{
-		//如果是空的那么就继续为空直到有不为空的为止
-		*flag = GetChess(x1, y1);
-	}
-	//如果找到了对面的棋子返回0
-	if ((ChessTag[x1][y1] != *tag && ChessTag[x1][y1] != NULLCHESS))
-	{
-		return 0;
-	}
-	if (ChessTag[x1][y1] == NULLCHESS)
-	{
-		if (CalculatePointDiretion(&x1, &y1, direction))
-		{
-			//只有碰到空的棋子才加分
-			return JudgeChessCanWin2(&x1, &y1, tag,flag, direction, --Depth) + 1;
-		}
-		else
-		{
-			return 1;
-		}
-	}
-	if (CalculatePointDiretion(&x1, &y1, direction))
-	{
-		//碰到自己的棋子跳过
-		return JudgeChessCanWin2(&x1, &y1, tag,flag, direction, --Depth);
-	}
-	else
-	{
-		return 0;
-	}
 
-}
-//这个是判断非对手的连续空位
+/*--------------------------------------------第一轮筛选的配套算法-------------------------------------------*/
+//这个是判断单个方向非对手的连续空位 遇到对手就停止
 int CMFCFivePointsChessApp::JudgeChessCanWin(int *x, int *y, int* tag, Direction direction, int Depth,int* FindDepth)
 {
 	int x1 = *x;
@@ -3436,6 +3414,8 @@ int CMFCFivePointsChessApp::JudgeChessCanWin(int *x, int *y, int* tag, Direction
 	
 	
 }
+
+/*--------------------------------------------第四轮筛选的配套算法-------------------------------------------*/
 //这个用于得到空格附近真实棋子数目并扩大两倍后进行进一步判断 把1格、2格和3格细化成0 1 2 3 4 5分 
 //如果一边的OurChessCount已经等于TargetCount 那么只要另外一边不是下面碰到墙和敌人的情况都可以去掉
 //如果OurChessCount==0 FindDepth=4 那么就说明碰到敌人或者墙 要在外部手动进行减分 
@@ -3563,113 +3543,6 @@ int CMFCFivePointsChessApp::CalCulateFromChessCountForSomeDetail(int * OurChessC
 //这种是除非遇到敌人棋子不然就一直递归
 //这个是判断5格子之内自己的棋子数 中途不能遇到对手棋子
 //就是获得5格内连续的自己的棋子
-int CMFCFivePointsChessApp::JudgeChessDirection2(int *x, int *y, int* tag, Direction direction, int Depth)
-{
-	int x1 = *x;
-	int y1 = *y;
-	if (Depth == 5)
-	{
-		//这个算法开始的格子是空的 所以tag是NULL 直接跳过进去下一层迭代
-		if (CalculatePointDiretion(&x1, &y1, direction))
-		{
-			return JudgeChessDirection2(&x1, &y1, tag, direction, --Depth);
-		}
-		else
-		{
-			return 0;
-		}
-
-	}
-	if (*tag == NULLCHESS)
-	{
-		//如果是空的那么就继续为空直到有不为空的为止
-
-		*tag = GetChess(x1, y1);
-		if (*tag == NULLCHESS)
-		{
-			//如果这一个是空的就直接跳过
-			if (CalculatePointDiretion(&x1, &y1, direction))
-			{
-				return JudgeChessDirection2(&x1, &y1, tag, direction, --Depth);
-			}
-			else
-			{
-				return 0;
-			}
-
-
-		}
-	}
-	if (Depth <= 0 || (ChessTag[x1][y1] != *tag && ChessTag[x1][y1] != NULLCHESS))
-	{
-		return 0;
-	}
-	if (ChessTag[x1][y1] == NULLCHESS)
-	{
-		if (CalculatePointDiretion(&x1, &y1, direction))
-		{
-			return JudgeChessDirection2(&x1, &y1, tag, direction, --Depth);
-		}
-		else
-		{
-			//不能再向附近移动就直接返回这层的数量
-			return 0;
-		}
-
-	}
-	if (CalculatePointDiretion(&x1, &y1, direction))
-	{
-		return JudgeChessDirection2(&x1, &y1, tag, direction, --Depth) + 1;
-	}
-	else
-	{
-		//不能再向附近移动就直接返回这层的数量
-		return 1;
-	}
-}
-
-int CMFCFivePointsChessApp::JudgeChessDirection(int *x, int *y, int* tag, Direction direction, int Depth)//depth为探索深度
-{
-	int x1 = *x;
-	int y1 = *y;
-	if (Depth == 5)
-	{
-		//这个算法开始的格子是空的 所以tag是NULL 直接跳过进去下一层迭代
-		if (CalculatePointDiretion(&x1, &y1, direction))
-		{
-			return JudgeChessDirection(&x1, &y1, tag, direction, --Depth);
-		}
-		else
-		{
-			return 0;
-		}
-		
-	}
-	if (Depth == 4)
-	{
-		*tag = GetChess(x1, y1);
-		if (*tag == NULLCHESS)
-		{
-			//如果这一个是空的就直接返回
-			return 0;
-		}
-	}
-	if (Depth <= 0 || ChessTag[x1][y1] != *tag)
-	{
-		return 0;
-	}
-	if (CalculatePointDiretion(&x1, &y1, direction))
-	{
-		return JudgeChessDirection(&x1, &y1, tag, direction, --Depth) + 1;
-	}
-	else
-	{
-		//不能再向附近移动就直接返回这层的数量
-		return 1;
-	}
-
-}
-//把自己也计算了
 int CMFCFivePointsChessApp::JudgeWinDirection(int *x,int *y,int* tag,Direction direction,int Depth)//depth为探索深度
 {
 	int x1=*x;
@@ -3687,6 +3560,29 @@ int CMFCFivePointsChessApp::JudgeWinDirection(int *x,int *y,int* tag,Direction d
 		return 1;
 	}
 	
+}
+void CMFCFivePointsChessApp::initViewChessTag()
+{
+	for (int i = 0; i < ChessBlockNum - 1; i++)
+	{
+		for (int j = 0; j < ChessBlockNum - 1; j++)
+		{
+			ChessViewTag[i][j] = 0;
+		}
+	}
+}
+void CMFCFivePointsChessApp::TimeRunCDOfViewChessTag()
+{
+	for (int i = 0; i < ChessBlockNum - 1; i++)
+	{
+		for (int j = 0; j < ChessBlockNum - 1; j++)
+		{
+			if (ChessViewTag[i][j] > 0)
+			{
+				ChessViewTag[i][j] -= 1;
+			}
+		}
+	}
 }
 PaintType CMFCFivePointsChessApp::Regret()
 {
@@ -3805,6 +3701,590 @@ bool CMFCFivePointsChessApp::CalculatePointDiretion(int* x, int* y,Direction dir
 	return false;
 }
 
+void CMFCFivePointsChessApp::Skill1Effect(int x,int y)
+{
+	int x1 = x;
+	int y1 = y;
+	if (ChessTag[x][y] == BLACKCHESS)
+	{
+		ChessTag[x][y] = WHITECHESS;
+	}
+	else
+	{
+		if (ChessTag[x][y] == WHITECHESS)
+		{
+			ChessTag[x][y] = BLACKCHESS;
+		}
+	}
+	if (JudgeWin(x, y))
+	{
+		ChessTag[x][y] = NULLCHESS;
+	}
+	while (CalculatePointDiretion(&x, &y, selectDirection))
+	{
+	
+		if (ChessTag[x][y] == BLACKCHESS)
+		{
+			ChessTag[x][y] = WHITECHESS;
+		}
+		else
+		{
+			if (ChessTag[x][y] == WHITECHESS)
+			{
+				ChessTag[x][y] = BLACKCHESS;
+			}
+		}
+		if (JudgeWin(x, y))
+		{
+			ChessTag[x][y] = NULLCHESS;
+		}
+	}
+	x = x1;
+	y = y1;
+	while (CalculatePointDiretion(&x, &y, (Direction)(selectDirection+4)))
+	{
+		if (ChessTag[x][y] == BLACKCHESS)
+		{
+			ChessTag[x][y] = WHITECHESS;
+		}
+		else
+		{
+			if (ChessTag[x][y] == WHITECHESS)
+			{
+				ChessTag[x][y] = BLACKCHESS;
+			}
+		}
+		if (JudgeWin(x, y))
+		{
+			ChessTag[x][y] = NULLCHESS;
+		}
+	}
+}
+
+void CMFCFivePointsChessApp::Skill2Effect()
+{
+	int x, y;
+	if (!isSelectTimeRect)
+	{
+		x = TimeRectPoint[0];
+		y = TimeRectPoint[1];
+		int x1, y1;
+		//0
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, LeftUp))
+		{
+			SelectChessTimeRect[0] = ChessTag[x1][y1];
+		}
+		else
+		{
+			SelectChessTimeRect[0] = NULLCHESS;
+		}
+		//1
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, Up))
+		{
+			SelectChessTimeRect[1] = ChessTag[x1][y1];
+		}
+		else
+		{
+			SelectChessTimeRect[1] = NULLCHESS;
+		}
+		//2
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, RightUp))
+		{
+			SelectChessTimeRect[2] = ChessTag[x1][y1];
+		}
+		else
+		{
+			SelectChessTimeRect[2] = NULLCHESS;
+		}
+		//3
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, Left))
+		{
+			SelectChessTimeRect[3] = ChessTag[x1][y1];
+		}
+		else
+		{
+			SelectChessTimeRect[3] = NULLCHESS;
+		}
+		//4
+
+		SelectChessTimeRect[4] = ChessTag[x][y];
+
+		//5
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, Right))
+		{
+			SelectChessTimeRect[5] = ChessTag[x1][y1];
+		}
+		else
+		{
+			SelectChessTimeRect[5] = NULLCHESS;
+		}
+		//6
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, LeftDown))
+		{
+			SelectChessTimeRect[6] = ChessTag[x1][y1];
+		}
+		else
+		{
+			SelectChessTimeRect[6] = NULLCHESS;
+
+		}
+		//7
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, Down))
+		{
+			SelectChessTimeRect[7] = ChessTag[x1][y1];
+		}
+		else
+		{
+			SelectChessTimeRect[7] = NULLCHESS;
+		}
+		//8
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, RightDown))
+		{
+			SelectChessTimeRect[8] = ChessTag[x1][y1];
+		}
+		else
+		{
+			SelectChessTimeRect[8] = NULLCHESS;
+		}
+	}
+	else
+	{
+		x = TargetTimeRectPoint[0];
+		y = TargetTimeRectPoint[1];
+		int x1, y1;
+		//0
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, LeftUp))
+		{
+			TargetSelectChessTimeRect[0] = ChessTag[x1][y1];
+			ChessTag[x1][y1] = SelectChessTimeRect[0];
+			if (JudgeWin(x1, y1))
+			{
+				ChessTag[x1][y1] = NULLCHESS;
+			}
+		}
+		else
+		{
+			TargetSelectChessTimeRect[0] = NULLCHESS;
+		}
+		
+		//1
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, Up))
+		{
+			TargetSelectChessTimeRect[1] = ChessTag[x1][y1];
+			ChessTag[x1][y1] = SelectChessTimeRect[1];
+			if (JudgeWin(x1, y1))
+			{
+				ChessTag[x1][y1] = NULLCHESS;
+			}
+		}
+		else
+		{
+			TargetSelectChessTimeRect[1] = NULLCHESS;
+		}
+		
+		//2
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, RightUp))
+		{
+			TargetSelectChessTimeRect[2] = ChessTag[x1][y1];
+			ChessTag[x1][y1] = SelectChessTimeRect[2];
+			if (JudgeWin(x1, y1))
+			{
+				ChessTag[x1][y1] = NULLCHESS;
+			}
+		}
+		else
+		{
+			TargetSelectChessTimeRect[2] = NULLCHESS;
+		}
+		
+		//3
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, Left))
+		{
+			TargetSelectChessTimeRect[3] = ChessTag[x1][y1];
+			ChessTag[x1][y1] = SelectChessTimeRect[3];
+			if (JudgeWin(x1, y1))
+			{
+				ChessTag[x1][y1] = NULLCHESS;
+			}
+		}
+		else
+		{
+			TargetSelectChessTimeRect[3] = NULLCHESS;
+		}
+		
+		//4
+
+		TargetSelectChessTimeRect[4] = ChessTag[x][y];
+
+		ChessTag[x][y] = SelectChessTimeRect[4];
+		if (JudgeWin(x, y))
+		{
+			ChessTag[x][y] = NULLCHESS;
+		}
+		//5
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, Right))
+		{
+			TargetSelectChessTimeRect[5] = ChessTag[x1][y1];
+			ChessTag[x1][y1] = SelectChessTimeRect[5];
+			if (JudgeWin(x1, y1))
+			{
+				ChessTag[x1][y1] = NULLCHESS;
+			}
+		}
+		else
+		{
+			TargetSelectChessTimeRect[5] = NULLCHESS;
+		}
+		
+		//6
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, LeftDown))
+		{
+			TargetSelectChessTimeRect[6] = ChessTag[x1][y1];
+			ChessTag[x1][y1] = SelectChessTimeRect[6];
+			if (JudgeWin(x1, y1))
+			{
+				ChessTag[x1][y1] = NULLCHESS;
+			}
+		}
+		else
+		{
+			TargetSelectChessTimeRect[6] = NULLCHESS;
+
+		}
+		
+		//7
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, Down))
+		{
+			TargetSelectChessTimeRect[7] = ChessTag[x1][y1];
+		}
+		else
+		{
+			TargetSelectChessTimeRect[7] = NULLCHESS;
+		}
+		ChessTag[x1][y1] = SelectChessTimeRect[7];
+		if (JudgeWin(x1, y1))
+		{
+			ChessTag[x1][y1] = NULLCHESS;
+		}
+		//8
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, RightDown))
+		{
+			TargetSelectChessTimeRect[8] = ChessTag[x1][y1];
+		}
+		else
+		{
+			TargetSelectChessTimeRect[8] = NULLCHESS;
+		}
+		ChessTag[x1][y1] = SelectChessTimeRect[8];
+		if (JudgeWin(x1, y1))
+		{
+			ChessTag[x1][y1] = NULLCHESS;
+		}
+
+		x = TimeRectPoint[0];
+		y = TimeRectPoint[1];
+		//写回去原来的位置
+		//0
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, LeftUp))
+		{
+			 ChessTag[x1][y1]=TargetSelectChessTimeRect[0];
+			 if (JudgeWin(x1, y1))
+			 {
+				 ChessTag[x1][y1] = NULLCHESS;
+			 }
+		}
+		
+		//1
+		
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, Up))
+		{
+			 ChessTag[x1][y1]=TargetSelectChessTimeRect[1];
+			if (JudgeWin(x1, y1))
+			{
+				ChessTag[x1][y1] = NULLCHESS;
+			}
+		}
+		
+
+	
+		//2
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, RightUp))
+		{
+			ChessTag[x1][y1] = TargetSelectChessTimeRect[2];
+			if (JudgeWin(x1, y1))
+			{
+				ChessTag[x1][y1] = NULLCHESS;
+			}
+		}
+		//3
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, Left))
+		{
+			ChessTag[x1][y1] = TargetSelectChessTimeRect[3];
+			if (JudgeWin(x1, y1))
+			{
+				ChessTag[x1][y1] = NULLCHESS;
+			}
+		}
+		
+		
+		//4
+
+		 ChessTag[x][y]= TargetSelectChessTimeRect[4];
+		if (JudgeWin(x, y))
+		{
+			ChessTag[x][y] = NULLCHESS;
+		}
+		//5
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, Right))
+		{
+			ChessTag[x1][y1] = TargetSelectChessTimeRect[5];
+			if (JudgeWin(x1, y1))
+			{
+				ChessTag[x1][y1] = NULLCHESS;
+			}
+		}
+		
+	
+		//6
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, LeftDown))
+		{
+			ChessTag[x1][y1] = TargetSelectChessTimeRect[6];
+			if (JudgeWin(x1, y1))
+			{
+				ChessTag[x1][y1] = NULLCHESS;
+			}
+		}
+		
+		
+		//7
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, Down))
+		{
+			ChessTag[x1][y1] = TargetSelectChessTimeRect[7];
+			if (JudgeWin(x1, y1))
+			{
+				ChessTag[x1][y1] = NULLCHESS;
+			}
+		}
+		
+		
+		//8
+		x1 = x, y1 = y;
+		if (CalculatePointDiretion(&x1, &y1, RightDown))
+		{
+			ChessTag[x1][y1] = TargetSelectChessTimeRect[8];
+			if (JudgeWin(x1, y1))
+			{
+				ChessTag[x1][y1] = NULLCHESS;
+			}
+		}
+		
+		
+	}
+}
+void CMFCFivePointsChessApp::Skill3Effect(int x, int y)
+{
+	int x1, y1;
+	//0
+	x1 = x, y1 = y;
+	if (CalculatePointDiretion(&x1, &y1, LeftUp))
+	{
+		ChessTag[x1][y1] = NULLCHESS;
+	}
+
+	//1
+	x1 = x, y1 = y;
+	if (CalculatePointDiretion(&x1, &y1, Up))
+	{
+		ChessTag[x1][y1] = NULLCHESS;
+	}
+	
+	//2
+	x1 = x, y1 = y;
+	if (CalculatePointDiretion(&x1, &y1, RightUp))
+	{
+		ChessTag[x1][y1] = NULLCHESS;
+	}
+	
+	//3
+	x1 = x, y1 = y;
+	if (CalculatePointDiretion(&x1, &y1, Left))
+	{
+		ChessTag[x1][y1] = NULLCHESS;
+	}
+	
+	//4
+
+	ChessTag[x][y]=CANTCHESS;
+
+	//5
+	x1 = x, y1 = y;
+	if (CalculatePointDiretion(&x1, &y1, Right))
+	{
+		ChessTag[x1][y1] = NULLCHESS;
+	}
+	
+	//6
+	x1 = x, y1 = y;
+	if (CalculatePointDiretion(&x1, &y1, LeftDown))
+	{
+		ChessTag[x1][y1] = NULLCHESS;
+	}
+	
+	//7
+	x1 = x, y1 = y;
+	if (CalculatePointDiretion(&x1, &y1, Down))
+	{
+		ChessTag[x1][y1] = NULLCHESS;
+	}
+	
+	//8
+	x1 = x, y1 = y;
+	if (CalculatePointDiretion(&x1, &y1, RightDown))
+	{
+		ChessTag[x1][y1] = NULLCHESS;
+	}
+}
+
+void CMFCFivePointsChessApp::Skill4Effect(int x, int y,int CD)
+{
+	int x1, y1;
+	//0
+	x1 = x, y1 = y;
+	if (CalculatePointDiretion(&x1, &y1, LeftUp))
+	{
+		ChessViewTag[x1][y1] +=CD;
+	}
+
+	//1
+	x1 = x, y1 = y;
+	if (CalculatePointDiretion(&x1, &y1, Up))
+	{
+		ChessViewTag[x1][y1] +=CD;
+	}
+
+	//2
+	x1 = x, y1 = y;
+	if (CalculatePointDiretion(&x1, &y1, RightUp))
+	{
+		ChessViewTag[x1][y1] +=CD;
+	}
+
+	//3
+	x1 = x, y1 = y;
+	if (CalculatePointDiretion(&x1, &y1, Left))
+	{
+		ChessViewTag[x1][y1] +=CD;
+	}
+
+	//4
+
+	ChessViewTag[x][y] += CD;
+
+	//5
+	x1 = x, y1 = y;
+	if (CalculatePointDiretion(&x1, &y1, Right))
+	{
+		ChessViewTag[x1][y1] +=CD;
+	}
+
+	//6
+	x1 = x, y1 = y;
+	if (CalculatePointDiretion(&x1, &y1, LeftDown))
+	{
+		ChessViewTag[x1][y1] +=CD;
+	}
+
+	//7
+	x1 = x, y1 = y;
+	if (CalculatePointDiretion(&x1, &y1, Down))
+	{
+		ChessViewTag[x1][y1] +=CD;
+	}
+
+	//8
+	x1 = x, y1 = y;
+	if (CalculatePointDiretion(&x1, &y1, RightDown))
+	{
+		ChessViewTag[x1][y1] +=CD;
+	}
+
+}
+
+void CMFCFivePointsChessApp::ChangeSelectDirection(bool Q)
+{
+	switch (selectDirection)
+	{
+	case Left:
+		if (Q)
+		{
+			selectDirection = RightUp;
+		}
+		else
+		{
+			selectDirection = LeftUp;
+		}
+		break;
+	case Up:
+		if (Q)
+		{
+			selectDirection = LeftUp;
+		}
+		else
+		{
+			selectDirection = RightUp;
+		}
+		break;
+	case LeftUp:
+		if (Q)
+		{
+			selectDirection = Left;
+		}
+		else
+		{
+			selectDirection = Up;
+		}
+		break;
+	case RightUp:
+		if (Q)
+		{
+			selectDirection = Up;
+		}
+		else
+		{
+			selectDirection = Left;
+		}
+		break;
+	}
+}
+
+Direction CMFCFivePointsChessApp::GetSelectDirection()
+{
+	return selectDirection;
+}
+
 
 // 唯一的 CMFCFivePointsChessApp 对象
 
@@ -3879,30 +4359,93 @@ BOOL CMFCFivePointsChessApp::InitInstance()
 	//  而不是启动应用程序的消息泵。
 	return FALSE;
 }
-
-
-
+void CMFCFivePointsChessApp::AddChessFromRecord()
+{
+	if (pRecord)
+	{
+		for (int i = 0; i < ChessBlockNum - 1; i++)
+	   {
+		  for (int j = 0; j < ChessBlockNum - 1; j++)
+		  {
+			ChessTag[i][j] = 0;
+		  }
+	   }
+	}
+	Record* pCur = pRecord;
+	while (pCur)
+	{
+		ChessTag[pCur->x][pCur->y] = pCur->type;
+		pCur = pCur->next;
+	}
+}
+void CMFCFivePointsChessApp::ReverseRecord()
+{
+	if (!pRecord)
+	{
+		return;
+	}
+	Record* pCur = pRecord;
+	Record* pPre = NULL; 
+	Record *pNext = NULL;
+	while (pCur->next)
+	{
+		pNext = pCur->next;
+		pCur->next = pPre;
+		pPre = pCur;
+		pCur = pNext;
+	}
+	pCur->next = pPre;
+	pRecord = pCur;
+}
 void CMFCFivePointsChessApp::OnSave()
 {
 	// TODO: 在此添加控件通知处理程序代码
-	CString filename = _T("Test.txt");
+	 //格式：过滤器描述符（显示作用）+ \0 + 文件扩展名称（过滤作用）
+	//多个扩展名称之间用（;）分隔，两个过滤字符串之间以\0分隔
+	//最后的过滤器需要以两个\0\0结尾
+	char szFilters[] ="Text File(*.txt)\0*.txt\0"\
+		"\0";
+	CFileDialog FileDlg(FALSE,_T("txt"), _T("chess"), OFN_OVERWRITEPROMPT, _T("text Files(*.txt) | *.txt||"),NULL);
+	FileDlg.DoModal();
+	CString filename = FileDlg.GetPathName();
 	CString strWriteData;
 	CString str;
-	for (int i = 0; i < ChessBlockNum - 1; i++)
+	Record* pCur = pRecord;
+	str.Format(_T("%d \n"), GameMode);
+	strWriteData += str;
+	while (pCur)
 	{
-		for (int j = 0; j < ChessBlockNum - 1; j++)
+		str.Format(_T("%d %d "), pCur->x, pCur->y);
+		strWriteData += str;
+		switch (pCur->type)
 		{
-			if (j == ChessBlockNum - 2)
-			{
-				str.Format(_T("%d\n"), ChessTag[i][j]);
-			}
-			else
-			{
-				str.Format(_T("%d "), ChessTag[i][j]);
-			}
-			strWriteData += str;
+		case White:
+			str.Format(_T("%d \n"), WHITECHESS);
+			break;
+		case Black:
+			str.Format(_T("%d \n"), BLACKCHESS);
+			break;
+		default:
+			break;
 		}
+		strWriteData += str;
+		pCur = pCur->next;
 	}
+	//for (int i = 0; i < ChessBlockNum - 1; i++)
+	//{
+	//	for (int j = 0; j < ChessBlockNum - 1; j++)
+	//	{
+	//		if (j == ChessBlockNum - 2)
+	//		{
+	//			str.Format(_T("%d\n"), ChessTag[i][j]);
+	//		}
+	//		else
+	//		{
+	//			str.Format(_T("%d "), ChessTag[i][j]);
+	//		}
+	//		strWriteData += str;
+	//	}
+	//}
 	CStdioFile csFile;
 	CFileException cfException;
 	if (csFile.Open(filename, CFile::typeText | CFile::modeCreate | CFile::modeReadWrite ))//以txt方式读取|若没有文件则创建该文件|文件打开时不清除
@@ -3917,15 +4460,22 @@ void CMFCFivePointsChessApp::OnSave()
 
 void CMFCFivePointsChessApp::OnRead()
 {
+	char szFilters[] = "Text File(*.txt)\0*.txt\0"\
+		"\0";
+	CFileDialog FileDlg(TRUE, _T("txt"), _T("chess"), OFN_HIDEREADONLY, _T("text Files(*.txt) | *.txt||"), NULL);
+	FileDlg.DoModal();
 	CStdioFile FileRead;
-	if (!(FileRead.Open(_T("test.txt"), CFile::modeRead | CFile::typeText)))
+	if (!(FileRead.Open(FileDlg.GetPathName(), CFile::modeRead | CFile::typeText)))
 	{
 		return;
 	}
+	freeRecord();
 	vector<CString>vecReadText;
 	CString cstrValue;
+	int h = 0;
 	while (FileRead.ReadString(cstrValue))
 	{
+		h++;
 		vecReadText.push_back(cstrValue);
 	}
 
@@ -3933,21 +4483,76 @@ void CMFCFivePointsChessApp::OnRead()
 
 
 	CString str;
-	for (int i = 0; i < ChessBlockNum - 1; i++)
+	CString str1;
+	std::vector<int> temp;
+	for (int k = 0; k < vecReadText[0].GetLength(); k++)
 	{
-		int j = 0;
+		str = _T(" ");
+		str1= _T("\n");
+		if (vecReadText[0][k] != str&& vecReadText[0][k] != str1)
+		{
+			char a = vecReadText[0][k];
+			GameMode = (int)a - 48;
+		}
+	}
+	
+	for (int i = 1; i < h; i++)
+	{
+		
 		int count=vecReadText[i].GetLength();
 		str = _T(" ");
+		int num=0;
+		char a;
 		for (int k = 0; k < count; k++)
 		{
 			if (vecReadText[i][k] != str)
 			{
-				char a = vecReadText[i][k];
-				ChessTag[i][j] = (int)a-48;
-				j++;
+				 a = vecReadText[i][k];
+				 num=num*10+(int)a-48;
+			}
+			else
+			{
+				temp.push_back(num);
+				num = 0;
 			}
 		}
-		
+		pRecord = new Record{ temp.at(0), temp.at(1), (PaintType)temp.at(2), pRecord };
+		temp.clear();
 	}
-	
+	if (!pRecord)
+	{
+		return;
+	}
+	ReverseRecord();
+	AddChessFromRecord();
+	switch (pRecord->type)
+	{
+	case White:
+		ChangeFlag(BLACKCHESS);
+		str = "请黑方下子";
+		break;
+	case Black:
+		ChangeFlag(WHITECHESS);
+		str = "请白方下子";
+		break;
+	case Empty:
+		ChangeFlag(BLACKCHESS);
+		str = "请黑方下子";
+		break;
+	}
+	CMFCFivePointsChessDlg* pWnd = (CMFCFivePointsChessDlg*)AfxGetApp()->GetMainWnd();
+	pWnd->DrawSelectRect();
+	pWnd->MessageEdit.SetWindowTextW(str);
+}
+
+
+void CMFCFivePointsChessApp::OnRemoveRecord()
+{
+	char szFilters[] = "Text File(*.txt)\0*.txt\0"\
+		"\0";
+	CFileDialog FileDlg(TRUE, _T("txt"), _T("chess"), NULL , _T("text Files(*.txt) | *.txt||"), NULL);
+	FileDlg.DoModal();
+	DeleteFile(FileDlg.GetPathName());
+
+	// TODO: 在此添加命令处理程序代码
 }

@@ -41,10 +41,10 @@
     <ClCompile Include="MFC FivePointsChess.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="MFC FivePointsChessDlg.cpp">
+    <ClCompile Include="pch.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="pch.cpp">
+    <ClCompile Include="MFC FivePointsChessDlg.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
@@ -59,25 +59,37 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="res\MFC FivePointsChess.ico">
-      <Filter>资源文件</Filter>
-    </Image>
     <Image Include="res\board.bmp">
       <Filter>资源文件</Filter>
     </Image>
-    <Image Include="res\bitmap2.bmp">
+    <Image Include="res\black.bmp">
       <Filter>资源文件</Filter>
     </Image>
-    <Image Include="res\bmp00001.bmp">
+    <Image Include="res\white.bmp">
       <Filter>资源文件</Filter>
     </Image>
-    <Image Include="..\..\..\..\Desktop\white.bmp">
+    <Image Include="res\logo.ico">
       <Filter>资源文件</Filter>
     </Image>
-    <Image Include="..\..\..\..\Desktop\black.bmp">
+    <Image Include="res\1.bmp">
       <Filter>资源文件</Filter>
     </Image>
-    <Image Include="..\..\..\..\desktop\bitmap2.bmp">
+    <Image Include="res\2.bmp">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="res\3.bmp">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="res\4.bmp">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="res\5.bmp">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="res\6.bmp">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="res\Empty.bmp">
       <Filter>资源文件</Filter>
     </Image>
   </ItemGroup>

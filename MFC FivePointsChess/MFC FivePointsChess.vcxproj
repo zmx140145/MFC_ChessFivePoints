@@ -213,13 +213,17 @@
     <None Include="res\MFCFivePointsChess.rc2" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="..\..\..\..\desktop\bitmap2.bmp" />
-    <Image Include="..\..\..\..\Desktop\black.bmp" />
-    <Image Include="..\..\..\..\Desktop\white.bmp" />
-    <Image Include="res\bitmap2.bmp" />
-    <Image Include="res\bmp00001.bmp" />
+    <Image Include="res\1.bmp" />
+    <Image Include="res\2.bmp" />
+    <Image Include="res\3.bmp" />
+    <Image Include="res\4.bmp" />
+    <Image Include="res\5.bmp" />
+    <Image Include="res\6.bmp" />
+    <Image Include="res\black.bmp" />
     <Image Include="res\board.bmp" />
-    <Image Include="res\MFC FivePointsChess.ico" />
+    <Image Include="res\Empty.bmp" />
+    <Image Include="res\logo.ico" />
+    <Image Include="res\white.bmp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
