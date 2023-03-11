@@ -32,45 +32,62 @@ protected:
 	afx_msg HCURSOR OnQueryDragIcon();
 	DECLARE_MESSAGE_MAP()
 public:
-	
+	std::vector<CRect>ButtonPos;
+	//文字输出暂时储存
+	CString Public_Str;
+	//屏幕缩放比例
+	double size=1;
+	double Old_Size = 1;
 	//选择落子的方块的矩形位置
-	//相对于背景的相对坐标
-	//x坐标
+	//相对于棋盘的下标
+	//x下标
 	int SelectX;
-	//y坐标
+	//y下标
 	int SelectY;
-	CStatic ChessBoard;
-
+	//用于记录计分板的参数
+	int BlackWinCount = 0;
+	int WhiteWinCount = 0;
+	int GameRunCount = 0;
 	void DrawBackground(const int & choose);
 	//用来纠正选择点的位置防止出边界
 	void JudgeSelectPos(Direction dir);
-	void DrawSelectRect();
+	void DrawSelectRectAndChess();
 	CStatic select;
 	CButton button;
 	CStatic MessageText;
-
+	CButton RegretButton;
+	CEdit MessageEdit;
 	void DrawSkill2SelectRect(CDC * pDC, COLORREF color);
 	void DrawSkill1SelectRect(CDC * pDC, Direction direction, COLORREF color);
 	void ReDrawMessage(const CString & str);
+	void SizeChanged(int ClientX, int ClientY);
+	void OnDraw();
+	void DrawAllChess(CDC * pDC);
+	void DrawChess(CDC * pDC, PaintType type, int PosX, int PosY);
+	virtual BOOL PreTranslateMessage(MSG* pMsg);
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
-	void DrawAllChess(CMFCFivePointsChessApp* ChessApp);
-	void DrawChess(PaintType type, int PosX, int PosY);
+	//按下提示
 	afx_msg void OnBnClickedTips();
 	afx_msg BOOL OnEraseBkgnd(CDC* pDC);
-	/*afx_msg void OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags);*/
-	virtual BOOL PreTranslateMessage(MSG* pMsg);
 	afx_msg void OnClickedRegret();
-	
 	afx_msg void OnChanegeGameModeEasy();
 	afx_msg void OnChangeGameModePP();
-	CEdit MessageEdit;
 	afx_msg void OnBnClickedRestart();
 	afx_msg void OnDestroy();
 	afx_msg void OnGetMinMaxInfo(MINMAXINFO* lpMMI);
 	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
+	bool UseSkill();
 	afx_msg void OnSkill1();
 	afx_msg void OnSkill2();
 	afx_msg void OnSkill3();
 	afx_msg void OnSkill4();
-	CButton RegretButton;
+	afx_msg void OnRule();
+	afx_msg void OnControll();
+	afx_msg void OnChanegeGameModeMiddle();
+
+	afx_msg void OnViewScore();
+	void ShowScoreDlg();
+	afx_msg void OnExitGame();
+	afx_msg void OnDiff();
+	afx_msg void OnCc();
 };

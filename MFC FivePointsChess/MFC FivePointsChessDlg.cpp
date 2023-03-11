@@ -7,7 +7,9 @@
 #include "MFC FivePointsChess.h"
 #include "MFC FivePointsChessDlg.h"
 #include "afxdialogex.h"
-
+#include "AboutControll.h"
+#include "AboutRule.h"
+#include "Score.h"
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -69,7 +71,7 @@ void CMFCFivePointsChessDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
 
-	DDX_Control(pDX, IDC_BACKGROUND, ChessBoard);
+	
 	DDX_Control(pDX, IDC_BUTTON1, button);
 	DDX_Control(pDX, IDC_MESSAGE, MessageEdit);
 	DDX_Control(pDX, IDC_REGRET, RegretButton);
@@ -94,11 +96,19 @@ BEGIN_MESSAGE_MAP(CMFCFivePointsChessDlg, CDialogEx)
 	ON_COMMAND(ID_32780, &CMFCFivePointsChessDlg::OnSkill2)
 	ON_COMMAND(ID_32781, &CMFCFivePointsChessDlg::OnSkill3)
 	ON_COMMAND(ID_32782, &CMFCFivePointsChessDlg::OnSkill4)
+	ON_COMMAND(ID_32784, &CMFCFivePointsChessDlg::OnRule)
+	ON_COMMAND(ID_32785, &CMFCFivePointsChessDlg::OnControll)
+	ON_COMMAND(ID_32776, &CMFCFivePointsChessDlg::OnChanegeGameModeMiddle)
+//	ON_WM_DRAWITEM()
+ON_COMMAND(ID_32786, &CMFCFivePointsChessDlg::OnViewScore)
+ON_COMMAND(ID_32787, &CMFCFivePointsChessDlg::OnExitGame)
+ON_COMMAND(ID_DIF, &CMFCFivePointsChessDlg::OnDiff)
+ON_COMMAND(ID_CC, &CMFCFivePointsChessDlg::OnCc)
 END_MESSAGE_MAP()
 
 
 // CMFCFivePointsChessDlg 消息处理程序
-
+//初始化时设置定时器 检测大小变化
 BOOL CMFCFivePointsChessDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
@@ -129,22 +139,27 @@ BOOL CMFCFivePointsChessDlg::OnInitDialog()
 	SetIcon(m_hIcon, FALSE);		// 设置小图标
 
 	// TODO: 在此添加额外的初始化代码
-	SelectY = SelectX = ChessBlockNum / 2 * ChessBlockSide;
+	CRect   temprect(0, 0, 1370, 910);
+	CWnd::SetWindowPos(NULL, 0, 0, temprect.Width(), temprect.Height(), SWP_NOZORDER | SWP_NOMOVE);
+	CWnd::CenterWindow();
+	SelectY = SelectX = 7;
 	button.SetFocus();
-	CWnd *pWind;
-	pWind = GetDlgItem(IDC_BACKGROUND);
-	pWind->SetWindowPos(NULL, SPACE_X, SPACE_Y, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
 	theApp.GameMode = -1;
-	CString str;
-	str = "请选择模式!!!";
+	Public_Str = "请选择模式!!!";
 	theApp.initViewChessTag();
 	theApp.SetAI_Station(welcome);
-	ReDrawMessage(str);
-	SetTimer(1, 1000, NULL);
+	ReDrawMessage(Public_Str);
+	
+	SetTimer(1, 50, NULL);
 
 	return FALSE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
-
+//当用户拖动最小化窗口时系统调用此函数取得光标
+//显示。
+HCURSOR CMFCFivePointsChessDlg::OnQueryDragIcon()
+{
+	return static_cast<HCURSOR>(m_hIcon);
+}
 void CMFCFivePointsChessDlg::OnSysCommand(UINT nID, LPARAM lParam)
 {
 	if ((nID & 0xFFF0) == IDM_ABOUTBOX)
@@ -157,11 +172,7 @@ void CMFCFivePointsChessDlg::OnSysCommand(UINT nID, LPARAM lParam)
 		CDialogEx::OnSysCommand(nID, lParam);
 	}
 }
-
-// 如果向对话框添加最小化按钮，则需要下面的代码
-//  来绘制该图标。  对于使用文档/视图模型的 MFC 应用程序，
-//  这将由框架自动完成。
-
+//相当与视图文档的ondraw 
 void CMFCFivePointsChessDlg::OnPaint()
 {
 	if (IsIconic())
@@ -183,11 +194,133 @@ void CMFCFivePointsChessDlg::OnPaint()
 	}
 	else
 	{
-		
+		//重画整个窗口
+		//并不是每次都调用OnPaint 如当移动选择框的时候只重画棋盘
 		DrawBaclgroundAcorrdingSituation();
+
 		CDialogEx::OnPaint();
 	}
 }
+void CMFCFivePointsChessDlg::OnDraw()
+{
+	DrawSelectRectAndChess();
+}
+//定时器
+void CMFCFivePointsChessDlg::OnTimer(UINT_PTR nIDEvent)
+{
+	// TODO: 在此添加消息处理程序代码和/或调用默认值
+	switch (nIDEvent)
+	{
+
+	case 1:
+	{
+		//判断窗口是否被改变
+		Old_Size = size;
+		CRect rect;
+		GetClientRect(&rect);
+		if (rect.Width() < 1370 && rect.Height() < 910)
+		{
+			if (1370 * size - rect.Width() > 910 * size - rect.Height())
+			{
+				size = rect.Width() / 1370.0;
+				if (size != Old_Size)
+				{
+					SizeChanged(rect.Width(), rect.Height());
+					Invalidate();
+				}
+				return;
+			}
+			else
+			{
+				size = rect.Height() / 910.0;
+				if (size != Old_Size)
+				{
+					SizeChanged(rect.Width(), rect.Height());
+					Invalidate();
+				}
+				return;
+			}
+		}
+		else
+		{
+			if (rect.Width() < 1370)
+			{
+				size = rect.Width() / 1370.0;
+				if (size != Old_Size)
+				{
+					SizeChanged(rect.Width(), rect.Height());
+					Invalidate();
+				}
+				return;
+			}
+			if (rect.Height() < 910)
+			{
+				size = rect.Height() / 910.0;
+				if (size != Old_Size)
+				{
+					SizeChanged(rect.Width(), rect.Height());
+					Invalidate();
+				}
+				return;
+			}
+			size = 1;
+			if (size != Old_Size)
+			{
+				SizeChanged(rect.Width(), rect.Height());
+				Invalidate();
+
+			}
+
+
+
+		}
+		break;
+	}
+	}
+}
+//重绘文字
+void CMFCFivePointsChessDlg::ReDrawMessage(const CString& str)
+{
+	CWnd* pWnd = GetDlgItem(IDC_MESSAGE);
+	CRect rc{ (int)(660 * size),0,(int)(1370 * size),(int)(910 * size) };
+	CFont m_pFont;//创建新的字体
+	m_pFont.CreateFont(32 * size,							 // 字体高度
+		0,							 // 字体宽度
+		0,							 // 字体倾斜角
+		0,							 // 字体倾斜角
+		600 * size,				         // 字体的粗细
+		FALSE,						 // 字体是否为斜体
+		FALSE,						 // 字体是否有下划线
+		0,							 // 字体是否有删除线
+		ANSI_CHARSET,				         // 字体使用的字符集
+		OUT_DEFAULT_PRECIS,		     	                 // 指定如何选择合适的字体
+		CLIP_DEFAULT_PRECIS,    		                 // 确定裁剪的精度
+		DEFAULT_QUALITY,			                 // 怎么样跟选择的字体相符合
+		DEFAULT_PITCH | FF_SWISS,	                         // 间距标志和属性标志
+		_T("楷体"));
+	MessageEdit.SetFont(&m_pFont);
+	InvalidateRect(&rc);
+	MessageEdit.SetWindowTextW(str);
+	UpdateWindow();
+	DrawBaclgroundAcorrdingSituation();
+}
+//屏幕大小发生改变
+void CMFCFivePointsChessDlg::SizeChanged(int ClientX, int ClientY)
+{
+	CWnd *pWind;
+	pWind = GetDlgItem(IDC_TIPS);
+	CRect rect;
+	pWind->GetWindowRect(&rect);
+	pWind->SetWindowPos(NULL, 50 * size, 750 * size, 150 * size, 90 * size, SWP_NOZORDER);
+	pWind = GetDlgItem(IDC_REGRET);
+	pWind->SetWindowPos(NULL, 280 * size, 750 * size, 150 * size, 90 * size, SWP_NOZORDER);
+	pWind = GetDlgItem(IDC_RESTART);
+	pWind->SetWindowPos(NULL, 510 * size, 750 * size, 150 * size, 90 * size, SWP_NOZORDER);
+	pWind = GetDlgItem(IDC_MESSAGE);
+	pWind->SetWindowPos(NULL, 800 * size, 650 * size, 400 * size, 500 * size, SWP_NOZORDER);
+	ReDrawMessage(Public_Str);
+}
+//根据情况选择背景并调用DrawBackGround
 void CMFCFivePointsChessDlg::DrawBaclgroundAcorrdingSituation()
 {
 	switch (theApp.GameMode)
@@ -248,22 +381,13 @@ void CMFCFivePointsChessDlg::DrawBaclgroundAcorrdingSituation()
 		
 	
 }
-//当用户拖动最小化窗口时系统调用此函数取得光标
-//显示。
-HCURSOR CMFCFivePointsChessDlg::OnQueryDragIcon()
-{
-	return static_cast<HCURSOR>(m_hIcon);
-}
-
-
-
-
+//画整个背景 那么就要先画背景再画棋盘 棋子 选择框
 void CMFCFivePointsChessDlg::DrawBackground(const int& choose)
 {
-	CRect rect1{ChessBlockNum*ChessBlockSide+30,0,1470,910};
-	InvalidateRect(&rect1);
+	
 	CPaintDC   dc(this);
 	CRect   rect;
+	CRect   rect1{0,0,1370,910};
 	GetClientRect(&rect);
 	CDC   dcMem;
 	dcMem.CreateCompatibleDC(&dc);
@@ -295,26 +419,25 @@ void CMFCFivePointsChessDlg::DrawBackground(const int& choose)
 	BITMAP   bitmap;
 	bmpBackground.GetBitmap(&bitmap);
 	CBitmap   *pbmpOld = dcMem.SelectObject(&bmpBackground);
-	dc.StretchBlt(0, 0, rect.Width(), rect.Height(), &dcMem, 0, 0,
-		bitmap.bmWidth, bitmap.bmHeight, SRCCOPY);
-	DrawSelectRect();
+	dc.FillSolidRect(&rect1, RGB(240, 240, 240));
+	dc.StretchBlt(640*size, 0, (1370-640)*size, 910*size, &dcMem, 640, 0,bitmap.bmWidth-640, bitmap.bmHeight, SRCCOPY);
+	DrawSelectRectAndChess();
 }
-
 void CMFCFivePointsChessDlg::JudgeSelectPos(Direction dir)
 {
 	switch (dir)
 	{
 	case Left:
-		SelectX -= ChessBlockSide;
+		SelectX -= 1;
 		break;
 	case Right:
-		SelectX += ChessBlockSide;
+		SelectX +=1 ;
 		break;
 	case Up:
-		SelectY -= ChessBlockSide;
+		SelectY -=1 ;
 		break;
 	case Down:
-		SelectY += ChessBlockSide;
+		SelectY += 1;
 		break;
 	default:
 	{
@@ -322,86 +445,120 @@ void CMFCFivePointsChessDlg::JudgeSelectPos(Direction dir)
 	}
 		
 	}
-	if (SelectX <ChessBlockSide)
+	if (SelectX <0)
 	{
-		SelectX = ChessBlockSide;
+		SelectX = 0;
 	}
-	if (SelectX > ChessBlockSide*(ChessBlockNum - 1))
+	if (SelectX > ChessBlockNum-2)
 	{
-		SelectX = ChessBlockSide * (ChessBlockNum - 1);
+		SelectX = ChessBlockNum - 2;
 	}
-	if (SelectY < ChessBlockSide)
+	if (SelectY < 0)
 	{
-		SelectY = ChessBlockSide;
+		SelectY = 0;
 	}
-	if (SelectY > ChessBlockSide*(ChessBlockNum - 1))
+	if (SelectY > ChessBlockNum - 2)
 	{
-		SelectY = ChessBlockSide * (ChessBlockNum - 1);
+		SelectY = ChessBlockNum-2;
 	}
 	
 }
-
-void CMFCFivePointsChessDlg::DrawSelectRect()
+//选择框和棋盘的绘制 里面统一调用了 棋盘绘制和 技能框选择框的绘制 棋子的绘制
+void CMFCFivePointsChessDlg::DrawSelectRectAndChess()
 {
-	CWnd *pWind;
-	pWind = GetDlgItem(IDC_BACKGROUND);
 
-	CDC* pDC = pWind->GetDC();
-	//定义一个内存设备描述表对象（即后备缓冲区）
+	
+	CDC* pDC = GetDC();
 	CDC MemDC;
-	//定义一个位图对象
 	CBitmap MemBitmap;
-	CBitmap MemBitmap1;
-	//建立与屏幕设备描述表（前端缓冲区）兼容的内存设备描述表句柄（后备缓冲区）
-	
+	/*MemBitmap.LoadBitmapW(IDB_CHESSBOARD);*/
 	MemDC.CreateCompatibleDC(NULL);
-	//这时还不能绘图，因为没有位图的设备描述表是不能绘图的
-	//下面建立一个与屏幕设备描述表（或者内存设备描述表）兼容的位图
-
-	MemBitmap.LoadBitmapW(IDB_CHESSBOARD);
-	MemBitmap1.LoadBitmapW(IDB_CHESSBOARD);
-	//将位图选入到内存设备描述表
-	//只有选入了位图的设备描述表才有地方绘图，画到指定的位图上
+	MemBitmap.CreateCompatibleBitmap(pDC, 640 * size, 640 * size);
+	///////
+	
 	CBitmap *pOldBit = MemDC.SelectObject(&MemBitmap);
-	//先用背景色将位图清除干净，这里我用的是白色作为背景
-	//你也可以用自己应该用的颜色
-    
-	//绘图
-	CDC background;
-	background.CreateCompatibleDC(NULL);
-	background.SelectObject(&MemBitmap1);
+	CRect *r1 = new CRect(0, 0, ChessBlockNum*ChessBlockSide*size, ChessBlockNum*ChessBlockSide*size);
+	/*-------------------------画棋盘底色-------------------------*/
+	MemDC.FillSolidRect(*r1, RGB(234, 179, 99));
+	CPen pen;
+	//黑色笔
+	pen.CreatePen(PS_DASH, max(1,3*size), RGB(10, 10, 10));
+	MemDC.SelectObject(&pen);
+	/*-------------------------画棋盘线-------------------------*/
+	for (int i = 0; i < 15; i++)
+	{
+		int start = ChessBlockSide * size * (i + 1);
 
-	
-	
+		MemDC.MoveTo(start, ChessBlockSide*size);
+		MemDC.LineTo(start, (ChessBlockNum - 1)*ChessBlockSide*size);
+		MemDC.MoveTo(ChessBlockSide*size, start);
+		MemDC.LineTo((ChessBlockNum - 1)*ChessBlockSide*size, start);
+	}
+	MemDC.MoveTo((ChessBlockNum - 1)*ChessBlockSide*size, ChessBlockSide*size);
+	MemDC.LineTo((ChessBlockNum - 1)*ChessBlockSide*size, (ChessBlockNum - 1)*ChessBlockSide*size);
+	MemDC.MoveTo(ChessBlockSide*size, (ChessBlockNum - 1)*ChessBlockSide*size);
+	MemDC.LineTo((ChessBlockNum - 1)*ChessBlockSide*size, (ChessBlockNum - 1)*ChessBlockSide*size);
 
+	///////
+	free(r1);
+	pen.DeleteObject();
+	CBrush MyBrush(RGB(10, 10, 10)), *pOldBrush;
+	pOldBrush = MemDC.SelectObject(&MyBrush);
+	/*-------------------------画棋盘标志圆点-------------------------*/
+	//3 3
+	MemDC.Ellipse(CRect(((3 + 1)*ChessBlockSide - 4)*size, ((3 + 1)*ChessBlockSide - 4)*size, ((3 + 1)*ChessBlockSide + 4)*size, ((3 + 1)*ChessBlockSide + 4)*size));
+	//3 7
+	MemDC.Ellipse(CRect(((3 + 1)*ChessBlockSide - 4)*size, ((7 + 1)*ChessBlockSide - 4)*size, ((3+ 1)*ChessBlockSide + 4)*size, ((7 + 1)*ChessBlockSide + 4)*size));
+	//3 11
+	MemDC.Ellipse(CRect(((3 + 1)*ChessBlockSide - 4)*size, ((11 + 1)*ChessBlockSide - 4)*size, ((3 + 1)*ChessBlockSide + 4)*size, ((11 + 1)*ChessBlockSide + 4)*size));
+	//7 3
+	MemDC.Ellipse(CRect(((7 + 1)*ChessBlockSide - 4)*size, ((3 + 1)*ChessBlockSide - 4)*size, ((7 + 1)*ChessBlockSide + 4)*size, ((3 + 1)*ChessBlockSide + 4)*size));
+	//7 7
+	MemDC.Ellipse(CRect(((7 + 1)*ChessBlockSide - 4)*size, ((7 + 1)*ChessBlockSide - 4)*size, ((7 + 1)*ChessBlockSide + 4)*size, ((7 + 1)*ChessBlockSide + 4)*size));
+	//7 11
+	MemDC.Ellipse(CRect(((7 + 1)*ChessBlockSide - 4)*size, ((11 + 1)*ChessBlockSide - 4)*size, ((7 + 1)*ChessBlockSide + 4)*size, ((11 + 1)*ChessBlockSide + 4)*size));
+	//11 3
+	MemDC.Ellipse(CRect(((11 + 1)*ChessBlockSide - 4)*size, ((3 + 1)*ChessBlockSide - 4)*size, ((11 + 1)*ChessBlockSide + 4)*size, ((3 + 1)*ChessBlockSide + 4)*size));
+	//11 7
+	MemDC.Ellipse(CRect(((11 + 1)*ChessBlockSide - 4)*size, ((7 + 1)*ChessBlockSide - 4)*size, ((11 + 1)*ChessBlockSide + 4)*size, ((7 + 1)*ChessBlockSide + 4)*size));
+	//11 11
+	MemDC.Ellipse(CRect(((11 + 1)*ChessBlockSide - 4)*size, ((11 + 1)*ChessBlockSide - 4)*size, ((11 + 1)*ChessBlockSide + 4)*size, ((11 + 1)*ChessBlockSide + 4)*size));
+	MemDC.SelectObject(pOldBrush);
+	MyBrush.DeleteObject();
 	
+	/*-------------------------绘制所有棋子-------------------------*/
+	DrawAllChess(&MemDC);
+
+
+	/*-------------------------根据下棋方选择颜色并把选择框绘制-------------------------*/
 	COLORREF color;
 	switch (theApp.GetFlag())
 	{
 	case 0:
 	{
-		color= color = RGB(255, 255, 255);
+		color = color = RGB(255, 255, 255);
 		break;
 	}
 	case 1:
 	{
 		color = RGB(50, 50, 50);
-		
+
 		break;
 	}
 	case 2:
 	{
 		color = RGB(255, 255, 255);
-		
+
 		break;
 	}
 	}
-	CRect *r1 = new CRect(SelectX - 20, SelectY - 20, SelectX + 20, SelectY + 20);
+
+	
 	switch (theApp.GetSkill())
 	{
 	case skill1:
-		DrawSkill1SelectRect(&background, theApp.GetSelectDirection(), color);
-		pDC->BitBlt(0, 0, 640, 640, &background, 0, 0, SRCCOPY);
+		DrawSkill1SelectRect(&MemDC, theApp.GetSelectDirection(), color);
+
 		break;
 	case skill2:
 		if (theApp.isSelectTimeRect)
@@ -416,171 +573,134 @@ void CMFCFivePointsChessDlg::DrawSelectRect()
 				color = RGB(255, 255, 255);
 			}
 		}
-		DrawSkill2SelectRect(&background, color);
-		pDC->BitBlt(0, 0, 640, 640, &background, 0, 0, SRCCOPY);
+		DrawSkill2SelectRect(&MemDC, color);
+
 		break;
 	case skill4:
-	     DrawSkill2SelectRect(&background, color); 
-		pDC->BitBlt(0, 0, 640, 640, &background, 0, 0, SRCCOPY);
+		DrawSkill2SelectRect(&MemDC, color);
+
 		break;
 	default:
-		MemDC.FillSolidRect(*r1, color);
-		pDC->BitBlt(0, 0, 640, 640, &MemDC, 0, 0, SRCCOPY);
-		pDC->BitBlt(SelectX - 15, SelectY - 15, 30, 30, &background, SelectX - 15, SelectY - 15, SRCCOPY);
-		pDC->BitBlt(SelectX - 20, SelectY - 10, 40, 20, &background, SelectX - 20, SelectY - 10, SRCCOPY);
-		pDC->BitBlt(SelectX - 10, SelectY - 20, 20, 40, &background, SelectX - 10, SelectY - 20, SRCCOPY);
+		
+		pen.CreatePen(PS_DASH, 5*size, color);
+		MemDC.SelectObject(&pen);
+		MemDC.MoveTo(((SelectX+1)*ChessBlockSide*size- 10*size), (SelectY+1)*ChessBlockSide*size- 20*size);
+		MemDC.LineTo((SelectX+1)*ChessBlockSide*size- 20*size, (SelectY+1)*ChessBlockSide*size- 20*size);
+		MemDC.LineTo((SelectX+1)*ChessBlockSide*size- 20*size, (SelectY+1)*ChessBlockSide*size- 10*size);
+		MemDC.MoveTo((SelectX+1)*ChessBlockSide*size- 20*size, (SelectY+1)*ChessBlockSide*size+ 10*size);
+		MemDC.LineTo((SelectX+1)*ChessBlockSide*size- 20*size, (SelectY+1)*ChessBlockSide*size+ 20*size);
+		MemDC.LineTo((SelectX+1)*ChessBlockSide*size- 10*size, (SelectY+1)*ChessBlockSide*size+ 20*size);
+		MemDC.MoveTo((SelectX+1)*ChessBlockSide*size+ 10*size, (SelectY+1)*ChessBlockSide*size+ 20*size);
+		MemDC.LineTo((SelectX+1)*ChessBlockSide*size+ 20*size, (SelectY+1)*ChessBlockSide*size+ 20*size);
+		MemDC.LineTo((SelectX+1)*ChessBlockSide*size+ 20*size, (SelectY+1)*ChessBlockSide*size+ 10*size);
+		MemDC.MoveTo((SelectX+1)*ChessBlockSide*size+ 20*size, (SelectY+1)*ChessBlockSide*size- 10*size);
+		MemDC.LineTo((SelectX+1)*ChessBlockSide*size+ 20*size, (SelectY+1)*ChessBlockSide*size- 20*size);
+		MemDC.LineTo((SelectX+1)*ChessBlockSide*size+ 10*size, (SelectY+1)*ChessBlockSide*size- 20*size);
 		break;
 	}
 
-	
-	
+
+	pDC->BitBlt(30, 30, 640, 640, &MemDC, 0, 0, SRCCOPY);
+
 	//绘图完成后的清理
 	MemBitmap.DeleteObject();
-	MemBitmap1.DeleteObject();
 	MemDC.DeleteDC();
-	background.DeleteDC();
-	
-	delete r1;
-
-	
-	
 	ReleaseDC(pDC);
-	
-	//绘制所有棋子
-	DrawAllChess(&theApp);
 }
-
-
+//技能234的选择框绘制
 void CMFCFivePointsChessDlg::DrawSkill2SelectRect(CDC* pDC, COLORREF color)
 {
 	CPen pen;
-	pen.CreatePen(PS_DASH, 5, color);
+	pen.CreatePen(PS_DASH, 5*size, color);
 	pDC->SelectObject(&pen);
-	int x = SelectX / ChessBlockSide - 1;
-	int y = SelectY / ChessBlockSide - 1;
+	int x = SelectX;
+	int y = SelectY;
 	int x1 = x;
 	int y1 = y;
 	theApp.CalculatePointDiretion(&x, &y, RightUp);
 	theApp.CalculatePointDiretion(&x1, &y1, LeftDown);
-	x = (x + 1)* ChessBlockSide;
-	y = (y + 1) * ChessBlockSide;
-	x1 = (x1 + 1)*ChessBlockSide;
-	y1 = (y1 + 1)*ChessBlockSide;
-	pDC->MoveTo(x+20,y-20);
-	pDC->LineTo(x+20,y1+20);
-	pDC->LineTo(x1-20, y1+20);
-	pDC->LineTo(x1-20, y-20);
-	pDC->LineTo(x+20, y-20);
+	x = (x + 1)* ChessBlockSide*size;
+	y = (y + 1) * ChessBlockSide*size;
+	x1 = (x1 + 1)*ChessBlockSide*size;
+	y1 = (y1 + 1)*ChessBlockSide*size;
+	pDC->MoveTo(x+20*size,y-20*size);
+	pDC->LineTo(x+20*size,y1+20*size);
+	pDC->LineTo(x1-20*size, y1+20*size);
+	pDC->LineTo(x1-20*size, y-20*size);
+	pDC->LineTo(x+20*size, y-20*size);
 }
-
+//技能1的选择框绘制
 void CMFCFivePointsChessDlg::DrawSkill1SelectRect(CDC* pDC, Direction direction,COLORREF color)
 {
 	CPen pen;
-	pen.CreatePen(PS_DASH, 5, color);
+	pen.CreatePen(PS_DASH, 5*size, color);
 	pDC->SelectObject(&pen);
-	int x = SelectX / ChessBlockSide - 1;
-	int y = SelectY / ChessBlockSide - 1;
+	int x = SelectX;
+	int y = SelectY;
 	int x1 = x;
 	int y1 = y;
 	switch (direction)
 	{
 	case Left:
-		pDC->MoveTo(20, SelectY - 20);
-		pDC->LineTo(620, SelectY - 20);
-		pDC->LineTo(620, SelectY +20);
-		pDC->LineTo(20, SelectY + 20);
-		pDC->LineTo(20, SelectY -20);
+		pDC->MoveTo(20*size, (SelectY+1)*ChessBlockSide*size - 20*size);
+		pDC->LineTo(620*size, (SelectY+1)*ChessBlockSide*size - 20*size);
+		pDC->LineTo(620*size, (SelectY+1)*ChessBlockSide*size +20*size);
+		pDC->LineTo(20*size, (SelectY+1)*ChessBlockSide*size + 20*size);
+		pDC->LineTo(20*size, (SelectY+1)*ChessBlockSide*size -20*size);
 		break;
 	case RightUp:
 
 		while (theApp.CalculatePointDiretion(&x,&y,RightUp)){}
-		x = (x+1)* ChessBlockSide ;
-		y = (y+1) * ChessBlockSide ;
+		x = (x+1)* ChessBlockSide *size;
+		y = (y+1) * ChessBlockSide*size ;
 		while (theApp.CalculatePointDiretion(&x1, &y1, LeftDown)){}
-		x1 = (x1+1)*ChessBlockSide;
-		y1 = (y1 + 1)*ChessBlockSide;
-		pDC->MoveTo(x+15, y-15);
-		pDC->LineTo(x+15, y+15);
-		pDC->LineTo(x1+15, y1 + 15);
-		pDC->LineTo(x1 - 15, y1 + 15);
-		pDC->LineTo(x1 - 15, y1 - 15);
-		pDC->LineTo(x - 15, y - 15);
-		pDC->LineTo(x + 15, y - 15);
+		x1 = (x1+1)*ChessBlockSide*size;
+		y1 = (y1 + 1)*ChessBlockSide*size;
+		pDC->MoveTo(x+15*size, y-15*size);
+		pDC->LineTo(x+15*size, y+15*size);
+		pDC->LineTo(x1+15*size, y1 + 15*size);
+		pDC->LineTo(x1 - 15*size, y1 + 15*size);
+		pDC->LineTo(x1 - 15*size, y1 - 15*size);
+		pDC->LineTo(x - 15*size, y - 15*size);
+		pDC->LineTo(x + 15*size, y - 15*size);
 		break;
 	case LeftUp:
 		while (theApp.CalculatePointDiretion(&x, &y, LeftUp)) {}
-		x = (x + 1)* ChessBlockSide;
-		y = (y + 1) * ChessBlockSide;
+		x = (x + 1)* ChessBlockSide*size;
+		y = (y + 1) * ChessBlockSide*size;
 		while (theApp.CalculatePointDiretion(&x1, &y1, RightDown)) {}
-		x1 = (x1 + 1)*ChessBlockSide;
-		y1 = (y1 + 1)*ChessBlockSide;
-		pDC->MoveTo(x + 15, y - 15);
-		pDC->LineTo(x1 + 15, y1 - 15);
-		pDC->LineTo(x1 + 15, y1 + 15);
-		pDC->LineTo(x1 - 15, y1 + 15);
-		pDC->LineTo(x - 15, y + 15);
-		pDC->LineTo(x - 15, y - 15);
-		pDC->LineTo(x + 15, y - 15);
+		x1 = (x1 + 1)*ChessBlockSide*size;
+		y1 = (y1 + 1)*ChessBlockSide*size;
+		pDC->MoveTo(x + 15*size, y - 15*size);
+		pDC->LineTo(x1 + 15*size, y1 - 15*size);
+		pDC->LineTo(x1 + 15*size, y1 + 15*size);
+		pDC->LineTo(x1 - 15*size, y1 + 15*size);
+		pDC->LineTo(x - 15*size, y + 15*size);
+		pDC->LineTo(x - 15*size, y - 15*size);
+		pDC->LineTo(x + 15*size, y - 15*size);
 		break;
 	case Up:
-		pDC->MoveTo(SelectX - 20, 20);
-		pDC->LineTo(SelectX + 20, 20);
-		pDC->LineTo(SelectX + 20, 620);
-		pDC->LineTo(SelectX -20, 620);
-		pDC->LineTo(SelectX - 20, 20);
+		pDC->MoveTo((SelectX+1)*ChessBlockSide*size - 20*size, 20*size);
+		pDC->LineTo((SelectX+1)*ChessBlockSide*size + 20*size, 20*size);
+		pDC->LineTo((SelectX+1)*ChessBlockSide*size + 20*size, 620*size);
+		pDC->LineTo((SelectX+1)*ChessBlockSide*size -20*size, 620*size);
+		pDC->LineTo((SelectX+1)*ChessBlockSide*size - 20*size, 20*size);
 		break;
 	}
 }
-void CMFCFivePointsChessDlg::ReDrawMessage(const CString& str)
-{
-	CWnd* pWnd = GetDlgItem(IDC_MESSAGE);
-	CRect rc;
-	CFont m_pFont;//创建新的字体
-    m_pFont.CreateFont(32,							 // 字体高度
-		0,							 // 字体宽度
-		0,							 // 字体倾斜角
-		0,							 // 字体倾斜角
-		600,				         // 字体的粗细
-		FALSE,						 // 字体是否为斜体
-		FALSE,						 // 字体是否有下划线
-		0,							 // 字体是否有删除线
-		ANSI_CHARSET,				         // 字体使用的字符集
-		OUT_DEFAULT_PRECIS,		     	                 // 指定如何选择合适的字体
-		CLIP_DEFAULT_PRECIS,    		                 // 确定裁剪的精度
-		DEFAULT_QUALITY,			                 // 怎么样跟选择的字体相符合
-		DEFAULT_PITCH | FF_SWISS,	                         // 间距标志和属性标志
-		_T("楷体"));
-	MessageEdit.SetFont(&m_pFont);
-	pWnd->GetWindowRect(&rc);
-	ScreenToClient(&rc);
-	InvalidateRect(&rc);
-	MessageEdit.SetWindowTextW(str);
-	UpdateWindow();
-}
-void CMFCFivePointsChessDlg::OnTimer(UINT_PTR nIDEvent)
-{
-	// TODO: 在此添加消息处理程序代码和/或调用默认值
-	switch (nIDEvent)
-	{
-		
-		case 1:
-		{
-			
-			break;
-		}
-	}
-}
-void CMFCFivePointsChessDlg::DrawAllChess(CMFCFivePointsChessApp* ChessApp)
+
+//绘制棋盘
+void CMFCFivePointsChessDlg::DrawAllChess(CDC* pDC)
 {
 	for (int i = 0; i < ChessBlockNum - 1; i++)
 	{
 		for (int j = 0; j < ChessBlockNum - 1; j++)
 		{
-			if (ChessApp->ChessViewTag[i][j] != 0)
+			if (theApp.ChessViewTag[i][j] != 0)
 			{
 				continue;
 			}
-			switch (ChessApp->GetChess(i,j))
+			switch (theApp.GetChess(i,j))
 			{
 				//0是没有棋子不用绘制
 			case NULLCHESS:
@@ -591,75 +711,72 @@ void CMFCFivePointsChessDlg::DrawAllChess(CMFCFivePointsChessApp* ChessApp)
 			case BLACKCHESS:
 			{
 				//1是黑棋
-				DrawChess(Black, (i + 1)*ChessBlockSide - ChessBlockSide / 2, (j + 1)*ChessBlockSide - ChessBlockSide / 2);
+				DrawChess(pDC,Black, (i + 1)*ChessBlockSide, (j + 1)*ChessBlockSide );
 				break;
 			}
 			case WHITECHESS:
 			{
 				//2是白棋
-				DrawChess(White, (i + 1)*ChessBlockSide - ChessBlockSide / 2, (j + 1)*ChessBlockSide - ChessBlockSide / 2);
+				DrawChess(pDC,White, (i + 1)*ChessBlockSide , (j + 1)*ChessBlockSide );
 				break;
 			}
 			case CANTCHESS:
 			{
 				//3是坑
-				DrawChess(Empty, (i + 1)*ChessBlockSide - ChessBlockSide / 2, (j + 1)*ChessBlockSide - ChessBlockSide / 2);
+				DrawChess(pDC,Empty, (i + 1)*ChessBlockSide , (j + 1)*ChessBlockSide );
 				break;
 			}
 			}
 		}
 	}
 }
-void CMFCFivePointsChessDlg::DrawChess(PaintType type , int PosX ,int PosY)
+//绘制所有棋子
+void CMFCFivePointsChessDlg::DrawChess(CDC* pDC,PaintType type , int PosX ,int PosY)
 {
 	
-	CBitmap bmp;
+	COLORREF color = RGB(255, 255, 255);
 	switch (type)
 	{
 	case White:
 	{
-		bmp.LoadBitmapW(IDB_WHITE);//加载位图资源，将位图资源加载位图对象中
+		color = RGB(255, 255, 255);
 		break;
 	}
 	case Black:
 	{
-		bmp.LoadBitmapW(IDB_BLACK);//加载位图资源，将位图资源加载位图对象中
+		color = RGB(0, 0, 0);
 		break;
 	}
 	case Empty:
 	{
-		bmp.LoadBitmapW(IDB_EMPTY);//加载位图资源，将位图资源加载位图对象中
-		break;
+		color = RGB(200, 100, 20);
 	}
 	}
-	CDC* pDC;
-	CWnd *pWind;
-	pWind = GetDlgItem(IDC_BACKGROUND);
-	pDC = pWind->GetDC();
-	CDC ImageDC;
-	ImageDC.CreateCompatibleDC(pDC);
-	CBitmap *pOldImageBMP = ImageDC.SelectObject(&bmp);
-	TransparentBlt(pDC->m_hDC, PosX, PosY, 40,40, ImageDC.m_hDC, 0, 0, 40, 40, RGB(0, 255, 0));
-	ImageDC.SelectObject(pOldImageBMP);
-	ImageDC.DeleteDC();
-	bmp.DeleteObject();
-	ReleaseDC(pDC);
+	CBrush MyBrush(color), *pOldBrush;
+	pOldBrush = pDC->SelectObject(&MyBrush);
+	pDC->Ellipse(CRect((PosX - 18)*size, (PosY - 18)*size, (PosX + 18)*size, (PosY + 18)*size));
+	pDC->SelectObject(pOldBrush);
+	MyBrush.DeleteObject();
 	/*pDC->BitBlt(0, 0, 40, 40, &ImageDC, 0, 0, SRCCOPY);*/
 	
 
 }
-
+//按下提示
 void CMFCFivePointsChessDlg::OnBnClickedTips()
 {
 	// TODO: 在此添加控件通知处理程序代码
 	int x, y;
+	int gameMode = theApp.GameMode;
+	int depth = theApp.AI_FindDepth;
+	theApp.GameMode= 0;
+	theApp.AI_FindDepth = 1;
 	theApp.AI_FindBestPoint(&x, &y);
-	SelectX = (x + 1)*ChessBlockSide;
-	SelectY = (y + 1)*ChessBlockSide;
-	DrawSelectRect();
+	SelectX = x;
+		SelectY = y;
+		theApp.AI_FindDepth = depth;
+		theApp.GameMode = gameMode;
+	DrawSelectRectAndChess();
 }
-
-
 BOOL CMFCFivePointsChessDlg::OnEraseBkgnd(CDC* pDC)
 {
 	// TODO: 在此添加消息处理程序代码和/或调用默认值
@@ -668,9 +785,7 @@ BOOL CMFCFivePointsChessDlg::OnEraseBkgnd(CDC* pDC)
 	/*return CDialogEx::OnEraseBkgnd(pDC);*/
 }
 
-
-
-
+//消息处理 处理键盘消息 相当于OnKeyDown
 BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 {
 	// TODO: 在此添加专用代码和/或调用基类
@@ -682,12 +797,12 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 
 			switch (pMsg->wParam)
 			{
-			case VK_SPACE:
+			case VK_RETURN:
 			{
 				button.SetFocus();
 				//落子 
 
-				CString str;
+			
 				if (theApp.GetSkill() == noUse)
 				{
 
@@ -703,18 +818,25 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 						{
 						case NULLCHESS:
 						{
-							str = "请开始游戏";
+							Public_Str = "请开始游戏";
 							break;
 						}
 						case BLACKCHESS:
 						{
-							str = "黑方赢了！";
-							break;
+							Public_Str = "黑方赢了！";
+							ReDrawMessage(Public_Str);
+							Sleep(500);
+							ShowScoreDlg();
+							return TRUE;
+							
 						}
 						case WHITECHESS:
 						{
-							str = "白方赢了！";
-							break;
+							Public_Str = "白方赢了！";
+							ReDrawMessage(Public_Str);
+							Sleep(500);
+							ShowScoreDlg();
+							return TRUE;
 						}
 						default:
 							break;
@@ -730,7 +852,7 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 							if (theApp.TryAddChess(SelectX, SelectY, Black))
 							{
 								//如果成功下棋那么就切换下棋手
-								str = "请白方下子";
+								Public_Str = "请白方下子";
 								theApp.ChangeFlag(2);
 								break;
 							}
@@ -738,34 +860,43 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 							{
 								return TRUE;
 							}
-							str = "游戏结束！》》按空格";
-							ReDrawMessage(str);
-							DrawSelectRect();
+							Public_Str = "游戏结束！》》按空格";
+							GameRunCount++;
+							BlackWinCount++;
+							ReDrawMessage(Public_Str);
+							OnDraw();
 							return TRUE;
 						}
 						else
 						{
-							if (theApp.GameMode == 1)
+							if (theApp.GameMode >= 1&& theApp.GameMode<=2)
 							{
 								if (theApp.TryAddChess(SelectX, SelectY, Black))
 								{
-									DrawSelectRect();
+									OnDraw();
 									//如果成功下棋那么就切换下棋手
-									str = "电脑正在下子";
+									Public_Str = "电脑正在下子";
 									theApp.SetAI_Station(await);
 									theApp.ChangeFlag(2);
-									ReDrawMessage(str);
-									Sleep(300);
+									ReDrawMessage(Public_Str);
+									if (theApp.AI_FindDepth <= 3)
+									{
+										Sleep(300);
+									}
 									int x, y;
-									str = "思考中......";
-									ReDrawMessage(str);
-									Sleep(500);
+									Public_Str = "思考中......";
+									ReDrawMessage(Public_Str);
+									if (theApp.AI_FindDepth <= 3)
+									{
+										Sleep(500);
+									}
+									
 									if (theApp.AI_FindBestPoint(&x, &y))
 									{
 										//进行下棋
-										SelectX = (x + 1)*ChessBlockSide;
-										SelectY = (y + 1)*ChessBlockSide;
-										DrawSelectRect();
+										SelectX = x;
+										SelectY = y;
+										OnDraw();
 										Sleep(150);
 										if (!theApp.TryAddChess(SelectX, SelectY, White))
 										{
@@ -773,30 +904,32 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 											{
 												return TRUE;
 											}
-											str = "游戏结束！》》按空格";
-											ReDrawMessage(str);
-											DrawSelectRect();
+											Public_Str = "游戏结束！》》按空格";
+											GameRunCount++;
+											WhiteWinCount++;
+											ReDrawMessage(Public_Str);
+											OnDraw();
 											return TRUE;
 										}
 
-										DrawSelectRect();
-										str = "请玩家下子";
+										OnDraw();
+										Public_Str = "请玩家下子";
 										theApp.ChangeFlag(1);
 										break;
 									}
 									else
 									{
-										SelectX = (x + 1)*ChessBlockSide;
-										SelectY = (y + 1)*ChessBlockSide;
+										SelectX = x;
+											SelectY = y;
 										Sleep(500);
-										DrawSelectRect();
+										OnDraw();
 										Sleep(150);
 										if (!theApp.TryAddChess(SelectX, SelectY, White))
 										{
-											DrawSelectRect();
+											OnDraw();
 											return TRUE;
 										}
-										DrawSelectRect();
+										OnDraw();
 										//求和操作 //TODO:
 										theApp.ChangeFlag(1);
 										break;
@@ -804,21 +937,147 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 									}
 
 								}
-								DrawSelectRect();
+								if (theApp.GameWiner == Empty)
+								{
+									//玩家下棋失败
+									return TRUE;
+								}
+								//玩家胜利
+								Public_Str = "游戏结束！》》按空格";
+								GameRunCount++;
+							    BlackWinCount++;
+								ReDrawMessage(Public_Str);
+								OnDraw();
 								return TRUE;
+							}
+							else
+							{
+								//GameMode 3 机机对战 黑方
+								int x, y;
+								//更改电脑的算法
+								theApp.AI_FindDepth = 1;
+								if (theApp.AI_FindBestPoint(&x, &y))
+									{
+										//进行下棋
+										SelectX = x;
+										SelectY = y;
+										if (!theApp.TryAddChess(SelectX, SelectY,Black))
+										{
+											if (theApp.GameWiner == Empty)
+											{
+												return TRUE;
+											}
+											Public_Str = "游戏结束！》》按空格";
+											GameRunCount++;
+										    BlackWinCount++;
+											ReDrawMessage(Public_Str);
+											OnDraw();
+											return TRUE;
+										}
+
+										OnDraw();
+										Public_Str = "请白棋下子";
+										theApp.ChangeFlag(2);
+										break;
+									}
 							}
 						}
 
 					}
 					case 2:
 					{
+							return TRUE;
+
+					}
+					default:
+						break;
+					}
+				}
+				//下面一定不不包括Skill nouse的情况
+				else
+				{
+					if (!UseSkill())
+					{
+						return TRUE;
+					}
+
+					theApp.ChangeFlag(3 - theApp.GetFlag());
+
+				}
+				ReDrawMessage(Public_Str);
+				OnDraw();
+				if (theApp.GetFlag() == 1)
+				{
+					theApp.CD_Skill_Black--;
+				}
+				else
+				{
+					theApp.CD_Skill_White--;
+				}
+				theApp.TimeRunCDOfViewChessTag();
+				break;
+			}
+			case VK_SPACE:
+			{
+				button.SetFocus();
+				//落子 
+
+			
+				if (theApp.GetSkill() == noUse)
+				{
+
+
+					switch (theApp.GetFlag())
+					{
+					case 0:
+					{
+
+
+
+						switch (theApp.GameWiner)
+						{
+						case NULLCHESS:
+						{
+							Public_Str = "请开始游戏";
+						
+							break;
+						}
+						case BLACKCHESS:
+						{
+							Public_Str = "黑方赢了！";
+							ReDrawMessage(Public_Str);
+							Sleep(500);
+							ShowScoreDlg();
+							return TRUE;
+						}
+						case WHITECHESS:
+						{
+							Public_Str = "白方赢了！";
+							ReDrawMessage(Public_Str);
+							Sleep(500);
+							ShowScoreDlg();
+							return TRUE;
+						}
+						default:
+							break;
+						}
+
+						break;
+					}
+					case 1:
+					{
+						return TRUE;
+					}
+					case 2:
+					{
+		
 						//白色下棋
 						if (theApp.GameMode == 0)
 						{
 							if (theApp.TryAddChess(SelectX, SelectY, White))
 							{
 								//如果成功下棋那么就切换下棋手
-								str = "请黑方下子";
+								Public_Str = "请黑方下子";
 								theApp.ChangeFlag(1);
 								break;
 							}
@@ -826,10 +1085,42 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 							{
 								return TRUE;
 							}
-							str = "游戏结束！》》按空格";
-							ReDrawMessage(str);
-							DrawSelectRect();
+							Public_Str = "游戏结束！》》按空格";
+							GameRunCount++;
+							WhiteWinCount++;
+							ReDrawMessage(Public_Str);
+							OnDraw();
 							return TRUE;
+						}
+						else if(theApp.GameMode==3)
+						{
+							//GameMode 3 机机对战 白方
+							int x, y;
+							theApp.AI_FindDepth = 1;
+							if (theApp.AI_FindBestPoint(&x, &y))
+							{
+								//进行下棋
+								SelectX = x;
+								SelectY = y;
+								if (!theApp.TryAddChess(SelectX, SelectY, White))
+								{
+									if (theApp.GameWiner == Empty)
+									{
+										return TRUE;
+									}
+									Public_Str = "游戏结束！》》按空格";
+									GameRunCount++;
+									WhiteWinCount++;
+									ReDrawMessage(Public_Str);
+									OnDraw();
+									return TRUE;
+								}
+
+								OnDraw();
+								Public_Str = "请黑棋下子";
+								theApp.ChangeFlag(1);
+								break;
+							}
 						}
 
 					}
@@ -840,149 +1131,24 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 				//下面一定不不包括Skill nouse的情况
 				else
 	            {
-				switch (theApp.GetSkill())
+				if (!UseSkill())
 				{
-				case skill1:
-					str = "排";
-					ReDrawMessage(str);
-					Sleep(200+theApp.randInt(100,300));
-					str = "山";
-					ReDrawMessage(str);
-					Sleep(200 + theApp.randInt(100, 300));
-					str = "倒";
-					ReDrawMessage(str);
-					Sleep(200 + theApp.randInt(100, 300));
-					str = "海";
-					ReDrawMessage(str);
-					Sleep(200 + theApp.randInt(200, 300));
-					theApp.Skill1Effect(SelectX/ChessBlockSide-1, SelectY / ChessBlockSide - 1);
-					str = "技能释放完毕！！";
-					ReDrawMessage(str);
-					Sleep(400);
-					if (theApp.GetFlag() == 1)
-					{
-						str = "请白方下子";
-					}
-					else
-					{
-						str = "请黑方下子";
-					}
-					break;
-				case skill2:
-					if (theApp.isSelectTimeRect)
-					{
-						str = "时";
-						ReDrawMessage(str);
-						Sleep(200 + theApp.randInt(100, 300));
-						str = "空";
-						ReDrawMessage(str);
-						Sleep(200 + theApp.randInt(100, 300));
-						str = "据";
-						ReDrawMessage(str);
-						Sleep(200 + theApp.randInt(100, 300));
-						str = "阵";
-						ReDrawMessage(str);
-						Sleep(200 + theApp.randInt(200, 300));
-						theApp.TargetTimeRectPoint[0] = SelectX / ChessBlockSide - 1;
-						theApp.TargetTimeRectPoint[1] = SelectY / ChessBlockSide - 1;
-						theApp.Skill2Effect();
-						theApp.isSelectTimeRect = false;
-						str = "技能释放完毕！！";
-						ReDrawMessage(str);
-						Sleep(400);
-						if (theApp.GetFlag() == 1)
-						{
-							str = "请白方下子";
-						}
-						else
-						{
-							str = "请黑方下子";
-						}
-						break;
-					}
-					else
-					{
-						
-							theApp.TimeRectPoint[0] = SelectX / ChessBlockSide - 1;
-							theApp.TimeRectPoint[1] = SelectY / ChessBlockSide - 1;
-							theApp.Skill2Effect();
-							theApp.isSelectTimeRect = true;
-							str = "请选择需要移动到的位置！！";
-							ReDrawMessage(str);
-						return TRUE;
-					}
-					
-				case skill3:
-					if (!theApp.TryAddChess(SelectX, SelectY, (PaintType)theApp.GetFlag()))
-					{
-						return TRUE;
-					}
-					str = "同";
-					ReDrawMessage(str);
-					Sleep(200 + theApp.randInt(100, 300));
-					str = "归";
-					ReDrawMessage(str);
-					Sleep(200 + theApp.randInt(100, 300));
-					str = "于";
-					ReDrawMessage(str);
-					Sleep(200 + theApp.randInt(100, 300));
-					str = "尽";
-					ReDrawMessage(str);
-					Sleep(200 + theApp.randInt(200, 300));
-					theApp.Skill3Effect(SelectX / ChessBlockSide - 1, SelectY / ChessBlockSide - 1);
-					str = "技能释放完毕！！";
-					ReDrawMessage(str);
-					DrawSelectRect();
-					Sleep(400);
-					if (theApp.GetFlag() == 1)
-					{
-						str = "请白方下子";
-					}
-					else
-					{
-						str = "请黑方下子";
-					}
-					break;
-				case skill4:
-					
-					str = "信";
-					ReDrawMessage(str);
-					Sleep(200 + theApp.randInt(100, 300));
-					str = "号";
-					ReDrawMessage(str);
-					Sleep(200 + theApp.randInt(100, 300));
-					str = "屏";
-					ReDrawMessage(str);
-					Sleep(200 + theApp.randInt(100, 300));
-					str = "蔽";
-					ReDrawMessage(str);
-					Sleep(200 + theApp.randInt(200, 300));
-					theApp.Skill4Effect(SelectX / ChessBlockSide - 1, SelectY / ChessBlockSide - 1,6);
-					str = "技能释放完毕！！";
-					DrawSelectRect();
-					ReDrawMessage(str);
-					Sleep(400);
-					if (theApp.GetFlag() == 1)
-					{
-						str = "请白方下子";
-					}
-					else
-					{
-						str = "请黑方下子";
-					}
-					break;
-				
+					return TRUE;
 				}
-				theApp.SetSkill(noUse);
-				//到对方下子
-				
+
 				theApp.ChangeFlag(3 - theApp.GetFlag());
 				
                	}
-				ReDrawMessage(str);
-				DrawSelectRect();
-				theApp.CD_Skill_Black--;
-				theApp.CD_Skill_White--;
+				ReDrawMessage(Public_Str);
+				OnDraw();
+				if (theApp.GetFlag() == 1)
+				{
+					theApp.CD_Skill_Black--;
+				}
+				else
+				{
+					theApp.CD_Skill_White--;
+				}
 				theApp.TimeRunCDOfViewChessTag();
 
 				//SPACE结束
@@ -993,10 +1159,10 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 			//W
 			case 87:
 			{
-				if (theApp.GetFlag() == 1)
+				if (theApp.GetFlag() == 2)
 				{
 					JudgeSelectPos(Up);
-					DrawSelectRect();
+					OnDraw();
 				}
 
 				break;
@@ -1005,10 +1171,10 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 			//A
 			case 65:
 			{
-				if (theApp.GetFlag() == 1)
+				if (theApp.GetFlag() == 2)
 				{
 					JudgeSelectPos(Left);
-					DrawSelectRect();
+					OnDraw();
 				}
 
 				break;
@@ -1016,10 +1182,10 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 			//S
 			case 83:
 			{
-				if (theApp.GetFlag() == 1)
+				if (theApp.GetFlag() == 2)
 				{
 					JudgeSelectPos(Down);
-					DrawSelectRect();
+					OnDraw();
 				}
 
 				break;
@@ -1027,10 +1193,10 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 			//D
 			case 68:
 			{
-				if (theApp.GetFlag() == 1)
+				if (theApp.GetFlag() == 2)
 				{
 					JudgeSelectPos(Right);
-					DrawSelectRect();
+					OnDraw();
 				}
 				break;
 			}
@@ -1040,7 +1206,7 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 				if (theApp.GetSkill() != noUse)
 				{
 					theApp.ChangeSelectDirection(true);
-					DrawSelectRect();
+					OnDraw();
 				}
 				break;
 			}
@@ -1050,7 +1216,7 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 				if (theApp.GetSkill() != noUse)
 				{
 					theApp.ChangeSelectDirection(false);
-					DrawSelectRect();
+					OnDraw();
 				}
 				break;
 			}
@@ -1061,20 +1227,22 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 				{
 					theApp.SetSkill(noUse);
 					theApp.isSelectTimeRect = false;
-					DrawSelectRect();
-					CString str;
-					str = "技能取消";
-					ReDrawMessage(str);
+					OnDraw();
+					
+					Public_Str = "技能取消";
+					ReDrawMessage(Public_Str);
 					Sleep(400);
-					if (theApp.GetFlag() == 1)
+					if (theApp.GetFlag() == 2)
 					{
-						str = "请白方下子";
+						theApp.CD_Skill_White = -1;
+						Public_Str = "请白方下子";
 					}
 					else
 					{
-						str = "请黑方下子";
+						theApp.CD_Skill_Black = -1;
+						Public_Str = "请黑方下子";
 					}
-					ReDrawMessage(str);
+					ReDrawMessage(Public_Str);
 				}
 				
 				break;
@@ -1082,10 +1250,10 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 			//上
 			case VK_UP:
 			{
-				if (theApp.GetFlag() == 2)
+				if (theApp.GetFlag() == 1)
 				{
 					JudgeSelectPos(Up);
-					DrawSelectRect();
+					OnDraw();
 				}
 				break;
 			}
@@ -1093,30 +1261,30 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 			//左
 			case VK_LEFT:
 			{
-				if (theApp.GetFlag() == 2)
+				if (theApp.GetFlag() == 1)
 				{
 					JudgeSelectPos(Left);
-					DrawSelectRect();
+					OnDraw();
 				}
 				break;
 			}
 			//下
 			case VK_DOWN:
 			{
-				if (theApp.GetFlag() == 2)
+				if (theApp.GetFlag() == 1)
 				{
 					JudgeSelectPos(Down);
-					DrawSelectRect();
+					OnDraw();
 				}
 				break;
 			}
 			//右
 			case VK_RIGHT:
 			{
-				if (theApp.GetFlag() == 2)
+				if (theApp.GetFlag() == 1)
 				{
 					JudgeSelectPos(Right);
-					DrawSelectRect();
+					OnDraw();
 				}
 				break;
 			}
@@ -1138,7 +1306,7 @@ BOOL CMFCFivePointsChessDlg::PreTranslateMessage(MSG* pMsg)
 void CMFCFivePointsChessDlg::OnClickedRegret()
 {
 
-	CString str;
+	 
 	if (theApp.GameMode== 0 )
 	{
 		switch (theApp.Regret())
@@ -1149,20 +1317,20 @@ void CMFCFivePointsChessDlg::OnClickedRegret()
 		}
 		case White:
 		{
-			str = "请白方下子";
+			Public_Str = "请白方下子";
 			theApp.ChangeFlag(2);
 			break;
 		}
 		case Black:
 		{
-			str = "请黑方下子";
+			Public_Str = "请黑方下子";
 			theApp.ChangeFlag(1);
 			break;
 		}
 		}
 
-		ReDrawMessage(str);
-		DrawSelectRect();
+		ReDrawMessage(Public_Str);
+		OnDraw();
 	}
 	else
 	{
@@ -1172,40 +1340,76 @@ void CMFCFivePointsChessDlg::OnClickedRegret()
 			{
 			}
 			theApp.SetAI_Station(sad);
-			str = "哒咩！！";
+			Public_Str = "哒咩！！";
 			theApp.ChangeFlag(1);
-			ReDrawMessage(str);
-			DrawSelectRect();
+			ReDrawMessage(Public_Str);
+			OnDraw();
 		}
 	}
 	
 }
-
-
 void CMFCFivePointsChessDlg::OnChanegeGameModeEasy()
 {
-
-	// TODO: 在此添加命令处理程序代码
+	theApp.init();
+	theApp.initViewChessTag();
 	theApp.GameMode = 1;
+	theApp.AI_FindDepth = 1;
 	theApp.SetAI_Station(welcome); 
-	CString str;
-	str = "人机模式：你是黑方，我是白方\r\n 按空格下子 WASD移动 请多多指教";
-	ReDrawMessage(str);
+	OnDraw();
+	
+	Public_Str.Format(_T("人机模式（简单）：你是黑方，我是白方\r\n 按回车下子 方向键移动 \r\n请多多指教"));
+	ReDrawMessage(Public_Str);
 
 }
-
-
+void CMFCFivePointsChessDlg::OnChanegeGameModeMiddle()
+{
+	// TODO: 在此添加命令处理程序代码
+	theApp.init();
+	theApp.initViewChessTag();
+	theApp.GameMode = 2;
+	theApp.AI_FindDepth = 2;
+	theApp.SetAI_Station(welcome);
+	OnDraw();
+	
+	Public_Str .Format(_T("人机模式（中等）：你是黑方，我是白方\r\n 按回车下子 方向键移动 \r\n请多多指教"));
+	ReDrawMessage(Public_Str);
+}
+void CMFCFivePointsChessDlg::OnDiff()
+{
+	theApp.init();
+	theApp.initViewChessTag();
+	theApp.GameMode = 2;
+	theApp.AI_FindDepth = 3;
+	theApp.SetAI_Station(welcome);
+	OnDraw();
+	Public_Str.Format(_T("人机模式（困难）未完善：你是黑方，我是白方\r\n 按回车下子 方向键移动 \r\n请多多指教"));
+	ReDrawMessage(Public_Str);
+	// TODO: 在此添加命令处理程序代码
+}
 void CMFCFivePointsChessDlg::OnChangeGameModePP()
 {
+	theApp.init();
+	theApp.initViewChessTag();
 	theApp.GameMode = 0;
-	DrawSelectRect();
-	CString str;
-	str = "人人模式：黑方先手，白方后手 \r\n 按空格下子 \r\n 黑方：WASD移动 白方：方向键移动";
-	ReDrawMessage(str);
+	RegretButton.EnableWindow(true);
+	OnDraw();
+
+	Public_Str.Format(_T("人人模式：黑方先手，白方后手  \r\n 黑方：方向键移动 按回车下子\r\n白方：WASD移动 按空格下子")) ;
+	ReDrawMessage(Public_Str);
 	// TODO: 在此添加命令处理程序代码
 }
-
-
+//机机对战
+void CMFCFivePointsChessDlg::OnCc()
+{
+	theApp.init();
+	theApp.initViewChessTag();
+	theApp.GameMode = 3;
+	RegretButton.EnableWindow(true);
+	OnDraw();
+	Public_Str.Format(_T("机机模式：黑方先手，白方后手  \r\n 黑方： 按回车下子\r\n白方 按空格下子"));
+	ReDrawMessage(Public_Str);
+	// TODO: 在此添加命令处理程序代码
+}
 void CMFCFivePointsChessDlg::OnBnClickedRestart()
 {
 	
@@ -1213,39 +1417,35 @@ void CMFCFivePointsChessDlg::OnBnClickedRestart()
 	theApp.initViewChessTag();
 	theApp.GameMode = -1;
 	RegretButton.EnableWindow(true);
-	CString str;
-	str = "请选择模式!!!";
+
+	Public_Str = "请选择模式!!!";
 	theApp.SetAI_Station(welcome);
-	ReDrawMessage(str);
-	SelectY = SelectX = ChessBlockNum / 2 * ChessBlockSide;
-	DrawSelectRect();
+	ReDrawMessage(Public_Str);
+	SelectY = SelectX = 7;
+	OnDraw();
 
 	// TODO: 在此添加控件通知处理程序代码
 }
-
-
 void CMFCFivePointsChessDlg::OnDestroy()
 {
 	CDialogEx::OnDestroy();
 	theApp.freeRecord();
+	CAboutDlg aboutDlg;
+	aboutDlg.DoModal();
 	// TODO: 在此处添加消息处理程序代码
 }
-
-
 void CMFCFivePointsChessDlg::OnGetMinMaxInfo(MINMAXINFO* lpMMI)
 {
 	// TODO: 在此添加消息处理程序代码和/或调用默认值
-	lpMMI->ptMinTrackSize.x = 1370; // 设定最小跟踪宽度
+	lpMMI->ptMinTrackSize.x = 640; // 设定最小跟踪宽度
 
-	lpMMI->ptMinTrackSize.y = 914; // 设定最小跟踪高度
+	lpMMI->ptMinTrackSize.y = 520; // 设定最小跟踪高度
 
 	lpMMI->ptMaxTrackSize.x = 1370; // 设定最大跟踪宽度
 
-	lpMMI->ptMaxTrackSize.y = 914; // 设定最大跟踪高度
+	lpMMI->ptMaxTrackSize.y = 910; // 设定最大跟踪高度
 	CDialogEx::OnGetMinMaxInfo(lpMMI);
 }
-
-
 HBRUSH CMFCFivePointsChessDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 {
 	HBRUSH hbr = CDialogEx::OnCtlColor(pDC, pWnd, nCtlColor);
@@ -1266,12 +1466,12 @@ HBRUSH CMFCFivePointsChessDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 void CMFCFivePointsChessDlg::OnSkill1()
 {
 	// TODO: 在此添加命令处理程序代码
-	CString str;
+
 	
 	switch(theApp.GameMode)
 	{
 	case -1:
-		str = "请在人人模式下使用技能";
+		Public_Str = "请在人人模式下使用技能";
 		break;
 	case 0:
 		int* CD;
@@ -1283,36 +1483,34 @@ void CMFCFivePointsChessDlg::OnSkill1()
 		{
 			CD = &theApp.CD_Skill_White;
 		}
-		if ((*CD)<0)
+		if ((*CD)<=0)
 		{
 		
 		RegretButton.EnableWindow(FALSE);
-		str = "排山倒海\n任意一排或一列进行棋子反转 \n注意：太贪心会导致施法失败哦！ \n按Q或者E进行旋转 空格施法\n";
+		Public_Str = "排山倒海\n任意一排或一列进行棋子反转 \n注意：太贪心会导致施法失败哦！ \n按Q或者E进行旋转 空格施法\n";
 		theApp.SetSkill(skill1);
-		DrawSelectRect();
-		*CD = CDTIME;
+		OnDraw();
+		*CD = theApp.SkillCDTime;
 		}
 		else
 		{
-			str = "技能冷却中";
+			Public_Str.Format(_T("技能冷却中,%d回合后可用"), (*CD));
 		}
 		break;
 	case 1: case 2:
-		str = "该模式无法使用技能";
+		Public_Str = "该模式无法使用技能";
 		break;
 	}
-	ReDrawMessage(str);
+	ReDrawMessage(Public_Str);
 }
-
-
 void CMFCFivePointsChessDlg::OnSkill2()
 {
-	CString str;
+
 	
 	switch (theApp.GameMode)
 	{
 	case -1:
-		str = "请在人人模式下使用技能";
+		Public_Str = "请在人人模式下使用技能";
 		break;
 	case 0:
 		int* CD;
@@ -1324,38 +1522,36 @@ void CMFCFivePointsChessDlg::OnSkill2()
 		{
 			CD = &theApp.CD_Skill_White;
 		}
-		if ((*CD) < 0)
+		if ((*CD) <=0)
 		{
 			RegretButton.EnableWindow(FALSE);
-			str = "时空矩阵\n 对9格块进行时空传送\n注意：太贪心会导致施法失败\n传送距离太近会空间混乱哦\n未选择区域时选择方块与本方同色";
+			Public_Str = "时空矩阵\n 对9格块进行时空传送\n注意：太贪心会导致施法失败\n传送距离太近会空间混乱哦\n未选择区域时选择方块与本方同色";
 			theApp.SetSkill(skill2);
-			DrawSelectRect();
-			*CD = CDTIME;
+			OnDraw();
+			*CD = theApp.SkillCDTime;
 		}
 		else
 		{
-			str = "技能冷却中";
+			Public_Str.Format(_T("技能冷却中,%d回合后可用"), (*CD));
 		}
 		break;
 	case 1: case 2:
-		str = "该模式无法使用技能";
+		Public_Str = "该模式无法使用技能";
 		break;
 	}
-	ReDrawMessage(str);
+	ReDrawMessage(Public_Str);
 	// TODO: 在此添加命令处理程序代码
 }
-
-
 void CMFCFivePointsChessDlg::OnSkill3()
 {
 	
 	// TODO: 在此添加命令处理程序代码
-	CString str;
+
 
 	switch (theApp.GameMode)
 	{
 	case -1:
-		str = "请在人人模式下使用技能";
+		Public_Str = "请在人人模式下使用技能";
 		break;
 	case 0:
 		int* CD;
@@ -1367,37 +1563,36 @@ void CMFCFivePointsChessDlg::OnSkill3()
 		{
 			CD = &theApp.CD_Skill_White;
 		}
-		if ((*CD) < 0)
+		if ((*CD) <=0)
 		{
 			RegretButton.EnableWindow(FALSE);
-			str = "同归于尽\n 本方下一个棋子并对附近棋子造成爆炸伤害 并留下一个坑\n注意：不要炸死自己哦";
+			Public_Str = "同归于尽\n 本方下一个棋子并对附近棋子造成爆炸伤害 并留下一个坑\n注意：不要炸死自己哦";
 			theApp.SetSkill(skill3);
-			DrawSelectRect();
-			*CD = CDTIME;
+			OnDraw();
+			*CD = theApp.SkillCDTime;
 		}
 		else
 		{
-			str = "技能冷却中";
+			
+			Public_Str.Format(_T("技能冷却中,%d回合后可用"), (*CD) );
 		}
 		break;
 	case 1: case 2:
-		str = "该模式无法使用技能";
+		Public_Str = "该模式无法使用技能";
 		break;
 	}
-	ReDrawMessage(str);
+	ReDrawMessage(Public_Str);
 }
-
-
 void CMFCFivePointsChessDlg::OnSkill4()
 {
 	
 	// TODO: 在此添加命令处理程序代码
-	CString str;
+
 
 	switch (theApp.GameMode)
 	{
 	case -1:
-		str = "请在人人模式下使用技能";
+		Public_Str = "请在人人模式下使用技能";
 		break;
 	case 0:
 		int* CD;
@@ -1409,23 +1604,204 @@ void CMFCFivePointsChessDlg::OnSkill4()
 		{
 			CD = &theApp.CD_Skill_White;
 		}
-		if ((*CD) < 0)
+		if ((*CD) <=0)
 		{
 			RegretButton.EnableWindow(FALSE);
-			str = "信号屏蔽\n 在9格范围内发射天幕 使其与外界失去联系\n注意：被隐身的空格扔可以正常下棋 只是单纯看不见";
+			Public_Str = "信号屏蔽\n 在9格范围内发射天幕 使其与外界失去联系\n注意：被隐身的空格扔可以正常下棋 只是单纯看不见";
 			theApp.SetSkill(skill4);
-			DrawSelectRect();
-			*CD = CDTIME;
+			OnDraw();
+			*CD = theApp.SkillCDTime;
 		}
 		else
 		{
-			str = "技能冷却中";
+			Public_Str.Format(_T("技能冷却中,%d回合后可用"), (*CD) );
 		}
 		break;
 	case 1: case 2:
-		str = "该模式无法使用技能";
+		Public_Str = "该模式无法使用技能";
 		break;
 	}
-	ReDrawMessage(str);
+	ReDrawMessage(Public_Str);
+}
+//使用技能 通过这个方法统一调度所有的技能 设置冷却时间 实施效果
+bool CMFCFivePointsChessDlg::UseSkill()
+{
+
+	switch (theApp.GetSkill())
+	{
+	case skill1:
+		Public_Str = "排";
+		ReDrawMessage(Public_Str);
+		Sleep(200 + theApp.randInt(100, 300));
+		Public_Str = "山";
+		ReDrawMessage(Public_Str);
+		Sleep(200 + theApp.randInt(100, 300));
+		Public_Str = "倒";
+		ReDrawMessage(Public_Str);
+		Sleep(200 + theApp.randInt(100, 300));
+		Public_Str = "海";
+		ReDrawMessage(Public_Str);
+		Sleep(200 + theApp.randInt(200, 300));
+		theApp.Skill1Effect(SelectX , SelectY);
+		Public_Str = "技能释放完毕！！";
+		ReDrawMessage(Public_Str);
+		Sleep(400);
+		if (theApp.GetFlag() == 1)
+		{
+			Public_Str = "请白方下子";
+		}
+		else
+		{
+			Public_Str = "请黑方下子";
+		}
+		break;
+	case skill2:
+		if (theApp.isSelectTimeRect)
+		{
+			Public_Str = "时";
+			ReDrawMessage(Public_Str);
+			Sleep(200 + theApp.randInt(100, 300));
+			Public_Str = "空";
+			ReDrawMessage(Public_Str);
+			Sleep(200 + theApp.randInt(100, 300));
+			Public_Str = "据";
+			ReDrawMessage(Public_Str);
+			Sleep(200 + theApp.randInt(100, 300));
+			Public_Str = "阵";
+			ReDrawMessage(Public_Str);
+			Sleep(200 + theApp.randInt(200, 300));
+			theApp.TargetTimeRectPoint[0] = SelectX ;
+			theApp.TargetTimeRectPoint[1] = SelectY ;
+			theApp.Skill2Effect();
+			theApp.isSelectTimeRect = false;
+			Public_Str = "技能释放完毕！！";
+			ReDrawMessage(Public_Str);
+			Sleep(400);
+			if (theApp.GetFlag() == 1)
+			{
+				Public_Str = "请白方下子";
+			}
+			else
+			{
+				Public_Str = "请黑方下子";
+			}
+			break;
+		}
+		else
+		{
+
+			theApp.TimeRectPoint[0] = SelectX ;
+			theApp.TimeRectPoint[1] = SelectY ;
+			theApp.Skill2Effect();
+			theApp.isSelectTimeRect = true;
+			Public_Str = "请选择需要移动到的位置！！";
+			ReDrawMessage(Public_Str);
+			return false;
+		}
+
+	case skill3:
+		if (!theApp.TryAddChess(SelectX, SelectY, (PaintType)theApp.GetFlag()))
+		{
+			return false;
+		}
+		Public_Str = "同";
+		ReDrawMessage(Public_Str);
+		Sleep(200 + theApp.randInt(100, 300));
+		Public_Str = "归";
+		ReDrawMessage(Public_Str);
+		Sleep(200 + theApp.randInt(100, 300));
+		Public_Str = "于";
+		ReDrawMessage(Public_Str);
+		Sleep(200 + theApp.randInt(100, 300));
+		Public_Str = "尽";
+		ReDrawMessage(Public_Str);
+		Sleep(200 + theApp.randInt(200, 300));
+		theApp.Skill3Effect(SelectX , SelectY);
+		Public_Str = "技能释放完毕！！";
+		ReDrawMessage(Public_Str);
+		OnDraw();
+		Sleep(400);
+		if (theApp.GetFlag() == 1)
+		{
+			Public_Str = "请白方下子";
+		}
+		else
+		{
+			Public_Str = "请黑方下子";
+		}
+		break;
+	case skill4:
+
+		Public_Str = "信";
+		ReDrawMessage(Public_Str);
+		Sleep(200 + theApp.randInt(100, 300));
+		Public_Str = "号";
+		ReDrawMessage(Public_Str);
+		Sleep(200 + theApp.randInt(100, 300));
+		Public_Str = "屏";
+		ReDrawMessage(Public_Str);
+		Sleep(200 + theApp.randInt(100, 300));
+		Public_Str = "蔽";
+		ReDrawMessage(Public_Str);
+		Sleep(200 + theApp.randInt(200, 300));
+		theApp.Skill4Effect(SelectX , SelectY , theApp.Skill4ActiveTime);
+		Public_Str = "技能释放完毕！！";
+		OnDraw();
+		ReDrawMessage(Public_Str);
+		Sleep(400);
+		if (theApp.GetFlag() == 1)
+		{
+			Public_Str = "请白方下子";
+		}
+		else
+		{
+			Public_Str = "请黑方下子";
+		}
+		break;
+
+	}
+	theApp.SetSkill(noUse);
+	//到对方下子
+	return true;
 }
 /*-----------------技能区结束---------------------------*/
+//当按下查看规则 创建新的对话框
+void CMFCFivePointsChessDlg::OnRule()
+{
+	// TODO: 在此添加命令处理程序代码
+	AboutRule ruleDlg;
+	ruleDlg.theApp = &theApp;
+	ruleDlg.DoModal();
+}
+//当按下查看控制按键 创建新的对话框
+void CMFCFivePointsChessDlg::OnControll()
+{
+	// TODO: 在此添加命令处理程序代码
+	AboutControll controllDlg;
+	controllDlg.DoModal();
+}
+//按退出游戏
+void CMFCFivePointsChessDlg::OnExitGame()
+{
+	// TODO: 在此添加命令处理程序代码
+	::PostMessage(AfxGetMainWnd()->m_hWnd, WM_CLOSE, 0, 0);
+}
+//当按下查看成绩时
+void CMFCFivePointsChessDlg::OnViewScore()
+{
+	ShowScoreDlg();
+	// TODO: 在此添加命令处理程序代码
+}
+//查看成绩
+void CMFCFivePointsChessDlg::ShowScoreDlg()
+{
+	Score ScoreDlg;
+	ScoreDlg.BlackWinCount = BlackWinCount;
+	ScoreDlg.WhiteWinCount = WhiteWinCount;
+	ScoreDlg.GameRunCount = GameRunCount;
+	ScoreDlg.DoModal();
+}
+
+
+
+
